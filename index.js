@@ -1,18 +1,41 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const axios = require('axios');
 const express = require('express');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const GOOGLE_WEBHOOK = process.env.GOOGLE_WEBHOOK;
 
-// Bot prêt
+// ----- Enregistrement automatique de la commande /pointeuse -----
+const commands = [
+  new SlashCommandBuilder()
+    .setName('pointeuse')
+    .setDescription('Ouvre la pointeuse de service')
+].map(cmd => cmd.toJSON());
+
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
+(async () => {
+  try {
+    console.log('🔄 Mise à jour des commandes slash...');
+    await rest.put(
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      { body: commands }
+    );
+    console.log('✅ Commandes slash mises à jour');
+  } catch (err) {
+    console.error('❌ Erreur lors de l’enregistrement des commandes :', err);
+  }
+})();
+
+// ----- Bot prêt -----
 client.once('ready', () => {
-  console.log(`Connecté en tant que ${client.user.tag}`);
+  console.log(`🤖 Connecté en tant que ${client.user.tag}`);
 });
 
-// Commande /pointeuse
+// ----- Gestion des interactions -----
 client.on('interactionCreate', async interaction => {
+  // Commande /pointeuse
   if (interaction.isChatInputCommand() && interaction.commandName === 'pointeuse') {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Prendre son service').setStyle(ButtonStyle.Success),
@@ -23,7 +46,7 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: '🕒 Pointeuse de service', components: [row] });
   }
 
-  // Gestion des boutons
+  // Boutons
   if (interaction.isButton()) {
     const user = interaction.user;
     const now = new Date();
@@ -35,8 +58,13 @@ client.on('interactionCreate', async interaction => {
     };
 
     if (interaction.customId in actionMap) {
-      await axios.post(GOOGLE_WEBHOOK, { action: interaction.customId.replace('_service',''), userId: user.id, username: user.username, time: now.toISOString() });
-      return await interaction.reply({ content: actionMap[interaction.customId], ephemeral: true });
+      await axios.post(GOOGLE_WEBHOOK, {
+        action: interaction.customId.replace('_service', ''),
+        userId: user.id,
+        username: user.username,
+        time: now.toISOString()
+      });
+      return interaction.reply({ content: actionMap[interaction.customId], ephemeral: true });
     }
 
     if (interaction.customId === 'end_service') {
@@ -46,9 +74,9 @@ client.on('interactionCreate', async interaction => {
         .setTitle('🧾 Fin de service')
         .addFields(
           { name: 'Employé', value: `<@${user.id}>`, inline: true },
-          { name: 'Date', value: data.date, inline: true },
-          { name: 'Durée', value: data.hours, inline: true },
-          { name: 'Salaire', value: `${data.salary} €`, inline: true }
+          { name: 'Date', value: data.date || 'N/A', inline: true },
+          { name: 'Durée', value: data.hours || 'N/A', inline: true },
+          { name: 'Salaire', value: data.salary ? `${data.salary} €` : 'N/A', inline: true }
         )
         .setColor(0x2ecc71);
       await interaction.reply({ embeds: [embed] });
@@ -56,11 +84,11 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// Connexion bot
+// ----- Connexion du bot -----
 client.login(process.env.TOKEN);
 
-// Mini serveur Express pour Render
+// ----- Mini serveur Express pour Render -----
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (req, res) => res.send('Bot Discord en ligne ✅'));
-app.listen(PORT, () => console.log(`Serveur web minimal lancé sur le port ${PORT}`));
+app.listen(PORT, () => console.log(`🌐 Serveur web minimal lancé sur le port ${PORT}`));
