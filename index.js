@@ -7,14 +7,13 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const GOOGLE_WEBHOOK = process.env.GOOGLE_WEBHOOK;
 
 // Bot prêt
-client.once('clientReady', () => {
+client.once('ready', () => {
   console.log(`Connecté en tant que ${client.user.tag}`);
 });
 
 // Commande /pointeuse
 client.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-  if (interaction.commandName === 'pointeuse') {
+  if (interaction.isChatInputCommand() && interaction.commandName === 'pointeuse') {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Prendre son service').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId('pause_service').setLabel('⏸️ Pause').setStyle(ButtonStyle.Secondary),
@@ -23,38 +22,37 @@ client.on('interactionCreate', async interaction => {
     );
     await interaction.reply({ content: '🕒 Pointeuse de service', components: [row] });
   }
-});
 
-// Gestion des boutons
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isButton()) return;
-  const user = interaction.user;
-  const now = new Date();
+  // Gestion des boutons
+  if (interaction.isButton()) {
+    const user = interaction.user;
+    const now = new Date();
 
-  const actionMap = {
-    start_service: '🟢 Service commencé',
-    pause_service: '⏸️ Service mis en pause',
-    resume_service: '▶️ Service repris'
-  };
+    const actionMap = {
+      start_service: '🟢 Service commencé',
+      pause_service: '⏸️ Service mis en pause',
+      resume_service: '▶️ Service repris'
+    };
 
-  if (interaction.customId in actionMap) {
-    await axios.post(GOOGLE_WEBHOOK, { action: interaction.customId.replace('_service',''), userId: user.id, username: user.username, time: now.toISOString() });
-    return await interaction.reply({ content: actionMap[interaction.customId], ephemeral: true });
-  }
+    if (interaction.customId in actionMap) {
+      await axios.post(GOOGLE_WEBHOOK, { action: interaction.customId.replace('_service',''), userId: user.id, username: user.username, time: now.toISOString() });
+      return await interaction.reply({ content: actionMap[interaction.customId], ephemeral: true });
+    }
 
-  if (interaction.customId === 'end_service') {
-    const res = await axios.post(GOOGLE_WEBHOOK, { action: 'end', userId: user.id, time: now.toISOString() });
-    const data = res.data;
-    const embed = new EmbedBuilder()
-      .setTitle('🧾 Fin de service')
-      .addFields(
-        { name: 'Employé', value: `<@${user.id}>`, inline: true },
-        { name: 'Date', value: data.date, inline: true },
-        { name: 'Durée', value: data.hours, inline: true },
-        { name: 'Salaire', value: `${data.salary} €`, inline: true }
-      )
-      .setColor(0x2ecc71);
-    await interaction.reply({ embeds: [embed] });
+    if (interaction.customId === 'end_service') {
+      const res = await axios.post(GOOGLE_WEBHOOK, { action: 'end', userId: user.id, time: now.toISOString() });
+      const data = res.data;
+      const embed = new EmbedBuilder()
+        .setTitle('🧾 Fin de service')
+        .addFields(
+          { name: 'Employé', value: `<@${user.id}>`, inline: true },
+          { name: 'Date', value: data.date, inline: true },
+          { name: 'Durée', value: data.hours, inline: true },
+          { name: 'Salaire', value: `${data.salary} €`, inline: true }
+        )
+        .setColor(0x2ecc71);
+      await interaction.reply({ embeds: [embed] });
+    }
   }
 });
 
