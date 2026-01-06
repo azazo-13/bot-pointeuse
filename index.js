@@ -94,20 +94,24 @@ client.on('interactionCreate', async interaction => {
       if (data.error) return interaction.reply({ content: `❌ ${data.error}`, ephemeral: true });
 
       let messageText = '';
+
+      const member = interaction.guild.members.cache.get(user.id);
+      const displayName = member ? member.displayName : user.username;
+      
       switch(interaction.customId) {
         case 'start_service':
           userState.set(userId, { status: 'active' });
-          messageText = `🟢 Service pris ${user.username} ! Bon courage !`;
+          messageText = `🟢 Service pris ${displayName} ! Bon courage !`;
           break;
 
         case 'pause_service':
           userState.set(userId, { status: 'pause' });
-          messageText = `⏸️ Service en pause ${user.username}, profitez-en pour souffler.`;
+          messageText = `⏸️ Service en pause ${displayName}, profitez-en pour souffler.`;
           break;
 
         case 'resume_service':
           userState.set(userId, { status: 'active' });
-          messageText = `▶️ Reprise du service ${user.username}, courage !`;
+          messageText = `▶️ Reprise du service ${displayName}, courage !`;
           break;
 
         case 'end_service':
@@ -116,13 +120,18 @@ client.on('interactionCreate', async interaction => {
 
           const embed = new EmbedBuilder()
             .setTitle('🧾 Fin de service')
+            .setDescription(`Voici le résumé du service de <@${userId}>`)
+            .setColor(0x1abc9c) // couleur turquoise douce
+            .setThumbnail('https://cdn-icons-png.flaticon.com/512/2920/2920321.png') // icône de salaire / travail
             .addFields(
-              { name: 'Employé', value: `<@${userId}>`, inline: true },
-              { name: 'Date', value: data.date, inline: true },
-              { name: 'Durée', value: data.hours, inline: true },
-              { name: 'Salaire', value: `${data.salary} €`, inline: true }
-            )
-            .setColor(0x2ecc71);
+                { name: '👤 Employé', value: `<@${userId}>`, inline: true },
+                { name: '📅 Date', value: data.date, inline: true },
+                { name: '⏱ Durée', value: data.hours, inline: true },
+                { name: '💰 Salaire', value: `${data.salary} €`, inline: true }
+        )
+          .setFooter({ text: 'Pointeuse automatique • Service terminé' })
+          .setTimestamp();
+
 
           const payButton = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`paid_${userId}_${Date.now()}`).setLabel('💰 Payé').setStyle(ButtonStyle.Success)
@@ -161,7 +170,6 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isButton() && interaction.customId.startsWith('paid_')) {
     try {
       await interaction.message.delete();
-      return interaction.reply({ content: '💰 Salaire payé, félicitations !', ephemeral: true });
     } catch {
       return interaction.reply({ content: 'Impossible de supprimer le message.', ephemeral: true });
     }
