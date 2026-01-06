@@ -8,7 +8,9 @@ const GOOGLE_WEBHOOK = process.env.GOOGLE_WEBHOOK;
 
 // ----- Commandes slash globales -----
 const commands = [
-  new SlashCommandBuilder().setName('createp').setDescription('Créer la pointeuse générale')
+  new SlashCommandBuilder()
+    .setName('createp')
+    .setDescription('Créer la pointeuse générale')
 ].map(cmd => cmd.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -38,7 +40,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand() && interaction.commandName === 'createp') {
     const embed = new EmbedBuilder()
       .setTitle('🕒 Pointeuse générale')
-      .setDescription('Cliquez sur les boutons pour gérer votre service.')
+      .setDescription('Cliquez sur les boutons pour gérer votre service.\nGrades : employe, chef, patron (info seulement)')
       .setColor(0x3498db)
       .setFooter({ text: 'Pointeuse automatique' });
 
@@ -52,9 +54,10 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ embeds: [embed], components: [row] });
   }
 
-  // ----- Boutons Start / Pause / Resume -----
-  if (interaction.isButton() && ['start_service','pause_service','resume_service'].includes(interaction.customId)) {
+  // ----- Boutons Start / Pause / Resume / End -----
+  if (interaction.isButton() && ['start_service','pause_service','resume_service','end_service'].includes(interaction.customId)) {
     try {
+      // Envoyer la requête au webhook AppsScript
       const res = await axios.post(GOOGLE_WEBHOOK, {
         action: interaction.customId.replace('_service',''),
         userId: user.id,
@@ -64,53 +67,61 @@ client.on('interactionCreate', async interaction => {
 
       const data = res.data;
 
+      // Si action impossible
       if (data.error) {
         return interaction.reply({ content: `❌ ${data.error}`, ephemeral: true });
       }
 
+      // ----- Fin de service -----
+      if (interaction.customId === 'end_service') {
+        const embed = new EmbedBuilder()
+          .setTitle('🧾 Fin de service')
+          .addFields(
+            { name: 'Employé', value: `<@${user.id}>`, inline: true },
+            { name: 'Date', value: data.date, inline: true },
+            { name: 'Durée', value: data.hours, inline: true },
+            { name: 'Salaire', value: `${data.salary} €`, inline: true }
+          )
+          .setColor(0x2ecc71);
+
+        const payButton = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`paid_${user.id}_${Date.now()}`).setLabel('💰 Payé').setStyle(ButtonStyle.Success)
+        );
+
+        // Nettoyer les messages temporaires de l'utilisateur
+        activeMessages.forEach((msg, key) => {
+          if (msg.user.id === user.id) {
+            try { msg.delete?.(); } catch{}
+            activeMessages.delete(key);
+          }
+        });
+
+        return interaction.reply({ embeds: [embed], components: [payButton] });
+      }
+
+      // ----- Start / Pause / Resume -----
       activeMessages.set(interaction.id, interaction);
-      return interaction.reply({ content: `✅ ${interaction.customId.replace('_service','')} enregistré`, ephemeral: true });
+      let rpMessage = "";
+
+switch(interaction.customId) {
+  case 'start_service':
+    rpMessage = "🟢 Service pris ! Bon courage !";
+    break;
+  case 'pause_service':
+    rpMessage = "⏸️ Service en pause, profitez-en pour souffler.";
+    break;
+  case 'resume_service':
+    rpMessage = "▶️ Reprise du service, courage !";
+    break;
+  case 'end_service':
+    rpMessage = "🛑 Fin du service, bonne journée !";
+    break;
+}
+
+return interaction.reply({ content: rpMessage, ephemeral: true });
+
 
     } catch (err) {
-      return interaction.reply({ content: '❌ Erreur serveur. Veuillez réessayer.', ephemeral: true });
-    }
-  }
-
-  // ----- Bouton End -----
-  if (interaction.isButton() && interaction.customId === 'end_service') {
-    try {
-      const res = await axios.post(GOOGLE_WEBHOOK, { action: 'end', userId: user.id, time: now.toISOString() });
-      const data = res.data;
-
-      if (data.error) {
-        return interaction.reply({ content: `❌ ${data.error}`, ephemeral: true });
-      }
-
-      const embed = new EmbedBuilder()
-        .setTitle('🧾 Fin de service')
-        .addFields(
-          { name: 'Employé', value: `<@${user.id}>`, inline: true },
-          { name: 'Date', value: data.date, inline: true },
-          { name: 'Durée', value: data.hours, inline: true },
-          { name: 'Salaire', value: `${data.salary} €`, inline: true }
-        )
-        .setColor(0x2ecc71);
-
-      const payButton = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`paid_${user.id}_${Date.now()}`).setLabel('💰 Payé').setStyle(ButtonStyle.Success)
-      );
-
-      // Nettoyage des messages temporaires
-      activeMessages.forEach((msg, key) => {
-        if (msg.user.id === user.id) {
-          try { msg.delete?.(); } catch {}
-          activeMessages.delete(key);
-        }
-      });
-
-      return interaction.reply({ embeds: [embed], components: [payButton] });
-
-    } catch {
       return interaction.reply({ content: '❌ Erreur serveur. Veuillez réessayer.', ephemeral: true });
     }
   }
@@ -129,7 +140,7 @@ client.on('interactionCreate', async interaction => {
 // ----- Connexion -----
 client.login(process.env.TOKEN);
 
-// ----- Serveur Express -----
+// ----- Serveur Express minimal -----
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (req, res) => res.send('Bot Discord en ligne ✅'));
