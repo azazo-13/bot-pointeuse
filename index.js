@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
+const express = require('express'); // <-- Express pour Render
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
@@ -68,3 +69,17 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.login(process.env.TOKEN);
+
+// --------------------
+// Mini serveur Express pour Render Web Service
+// --------------------
+const app = express();
+const PORT = process.env.PORT || 10000; // Render fournit PORT automatiquement
+
+app.get('/', (req, res) => {
+  res.send('Bot Discord en ligne ✅');
+});
+
+app.listen(PORT, () => {
+  console.log(`Serveur web minimal lancé sur le port ${PORT}`);
+});
