@@ -6,7 +6,7 @@ const express = require('express');
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
 const GOOGLE_WEBHOOK = process.env.GOOGLE_WEBHOOK;
 
-// ----- Commandes slash globales -----
+// Commandes slash
 const commands = [
   new SlashCommandBuilder()
     .setName('createp')
@@ -25,43 +25,38 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   }
 })();
 
-// ----- Bot prêt -----
+// ----- Stockage des messages par utilisateur -----
+const userMessages = new Map(); // { userId: message }
+
 client.once('clientReady', () => console.log(`🤖 Connecté en tant que ${client.user.tag}`));
 
-// ----- Stockage temporaire -----
-const activeMessages = new Map(); // messages éphémères
-const userState = new Map();      // état des utilisateurs: active, pause, cooldown
+// ----- Stockage de l'état utilisateur -----
+const userState = new Map(); // { userId: { status: "active"|"pause"|"cooldown", cooldownEnd: Date } }
 
-// ----- Helper pour vérifier l'autorisation des actions -----
+// Helper pour vérifier les actions autorisées
 function isActionAllowed(userId, action) {
   const state = userState.get(userId);
   const now = new Date();
 
-  if (!state) return true; // aucun service actif, Start autorisé
+  if (!state) return true;
 
   if (state.status === 'cooldown') {
-    if (now < state.cooldownEnd) return false; // bloque tout pendant cooldown
-    userState.delete(userId); // cooldown terminé
+    if (now < state.cooldownEnd) return false;
+    userState.delete(userId);
     return true;
   }
 
-  if (state.status === 'active') {
-    return action === 'pause_service' || action === 'end_service';
-  }
-
-  if (state.status === 'pause') {
-    return action === 'resume_service' || action === 'end_service';
-  }
+  if (state.status === 'active') return action === 'pause_service' || action === 'end_service';
+  if (state.status === 'pause') return action === 'resume_service' || action === 'end_service';
 
   return true;
 }
 
-// ----- Interactions -----
+// ----- Interaction boutons -----
 client.on('interactionCreate', async interaction => {
   const user = interaction.user;
-  const now = new Date();
 
-  // ----- Commande /createP -----
+  // Commande /createP
   if (interaction.isChatInputCommand() && interaction.commandName === 'createp') {
     const embed = new EmbedBuilder()
       .setTitle('🕒 Pointeuse générale')
@@ -92,29 +87,32 @@ client.on('interactionCreate', async interaction => {
         action: interaction.customId.replace('_service',''),
         userId,
         username: user.username,
-        time: now.toISOString()
+        time: new Date().toISOString()
       });
 
       const data = res.data;
       if (data.error) return interaction.reply({ content: `❌ ${data.error}`, ephemeral: true });
 
-      let rpMessage = '';
+      let messageText = '';
       switch(interaction.customId) {
         case 'start_service':
           userState.set(userId, { status: 'active' });
-          rpMessage = '🟢 Service pris ! Bon courage !';
+          messageText = `🟢 Service pris ${user.username} ! Bon courage !`;
           break;
+
         case 'pause_service':
           userState.set(userId, { status: 'pause' });
-          rpMessage = '⏸️ Service en pause, profitez-en pour souffler.';
+          messageText = `⏸️ Service en pause ${user.username}, profitez-en pour souffler.`;
           break;
+
         case 'resume_service':
           userState.set(userId, { status: 'active' });
-          rpMessage = '▶️ Reprise du service, courage !';
+          messageText = `▶️ Reprise du service ${user.username}, courage !`;
           break;
+
         case 'end_service':
-          userState.set(userId, { status: 'cooldown', cooldownEnd: new Date(Date.now() + 2*60*1000) }); // 2 min cooldown
-          rpMessage = '🛑 Fin du service, bonne journée !';
+          userState.set(userId, { status: 'cooldown', cooldownEnd: new Date(Date.now() + 2*60*1000) }); // 2 min
+          messageText = null; // on supprime le message
 
           const embed = new EmbedBuilder()
             .setTitle('🧾 Fin de service')
@@ -130,21 +128,30 @@ client.on('interactionCreate', async interaction => {
             new ButtonBuilder().setCustomId(`paid_${userId}_${Date.now()}`).setLabel('💰 Payé').setStyle(ButtonStyle.Success)
           );
 
-          // Supprime tous les messages éphémères de l'utilisateur
-          activeMessages.forEach((msg, key) => {
-            if (msg.user.id === userId) {
-              try { msg.delete?.(); } catch{}
-              activeMessages.delete(key);
-            }
-          });
+          // Supprime uniquement le message de l'utilisateur
+          if (userMessages.has(userId)) {
+            try { await userMessages.get(userId).delete(); } catch{}
+            userMessages.delete(userId);
+          }
 
-          return interaction.reply({ content: rpMessage, embeds: [embed], components: [payButton], ephemeral: false });
+          return interaction.reply({ embeds: [embed], components: [payButton] });
       }
 
-      // Pour Start / Pause / Resume → message RP éphémère
-      const msg = await interaction.reply({ content: rpMessage, ephemeral: true });
-      activeMessages.set(interaction.id, interaction);
+      // Pour Start / Pause / Resume → message public ou update du message existant
+      if (messageText) {
+        if (userMessages.has(userId)) {
+          // Modifier le message existant
+          const msg = userMessages.get(userId);
+          await msg.edit({ content: messageText });
+        } else {
+          // Créer un nouveau message et stocker
+          const channel = interaction.channel;
+          const msg = await channel.send({ content: messageText });
+          userMessages.set(userId, msg);
+        }
+      }
 
+      return interaction.deferUpdate(); // pour retirer le spinner du bouton
     } catch (err) {
       return interaction.reply({ content: '❌ Erreur serveur. Veuillez réessayer.', ephemeral: true });
     }
