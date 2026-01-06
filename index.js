@@ -3,10 +3,11 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 const axios = require('axios');
 const express = require('express');
 
+// ----- Configuration -----
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const GOOGLE_WEBHOOK = process.env.GOOGLE_WEBHOOK;
 
-// ----- Enregistrement automatique de la commande /pointeuse -----
+// ----- Enregistrement global de la commande /pointeuse -----
 const commands = [
   new SlashCommandBuilder()
     .setName('pointeuse')
@@ -17,24 +18,25 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
   try {
-    console.log('🔄 Mise à jour des commandes slash...');
+    console.log('🔄 Mise à jour des commandes slash globales...');
     await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      Routes.applicationCommands(process.env.CLIENT_ID),
       { body: commands }
     );
-    console.log('✅ Commandes slash mises à jour');
+    console.log('✅ Commandes slash globales mises à jour');
   } catch (err) {
-    console.error('❌ Erreur lors de l’enregistrement des commandes :', err);
+    console.error('❌ Erreur lors de l’enregistrement global :', err);
   }
 })();
 
 // ----- Bot prêt -----
-client.once('ready', () => {
+client.once('clientReady', () => {
   console.log(`🤖 Connecté en tant que ${client.user.tag}`);
 });
 
 // ----- Gestion des interactions -----
 client.on('interactionCreate', async interaction => {
+
   // Commande /pointeuse
   if (interaction.isChatInputCommand() && interaction.commandName === 'pointeuse') {
     const row = new ActionRowBuilder().addComponents(
