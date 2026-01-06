@@ -6,7 +6,7 @@ const express = require('express');
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
 const GOOGLE_WEBHOOK = process.env.GOOGLE_WEBHOOK;
 
-// ----- Commande slash globale -----
+// ----- Commandes slash globales -----
 const commands = [
   new SlashCommandBuilder().setName('createp').setDescription('Créer la pointeuse générale')
 ].map(cmd => cmd.toJSON());
@@ -19,14 +19,14 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
     console.log('✅ Commandes globales mises à jour');
   } catch (err) {
-    console.error(err);
+    console.error('❌ Erreur lors de l’enregistrement global :', err);
   }
 })();
 
 // ----- Bot prêt -----
 client.once('clientReady', () => console.log(`🤖 Connecté en tant que ${client.user.tag}`));
 
-// ----- Stockage temporaire des messages pour nettoyage -----
+// ----- Stockage temporaire des messages -----
 const activeMessages = new Map();
 
 // ----- Interactions -----
@@ -34,7 +34,7 @@ client.on('interactionCreate', async interaction => {
   const user = interaction.user;
   const now = new Date();
 
-  // /createP
+  // ----- Commande /createP -----
   if (interaction.isChatInputCommand() && interaction.commandName === 'createp') {
     const embed = new EmbedBuilder()
       .setTitle('🕒 Pointeuse générale')
@@ -52,46 +52,70 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ embeds: [embed], components: [row] });
   }
 
-  // Boutons Start / Pause / Resume
+  // ----- Boutons Start / Pause / Resume -----
   if (interaction.isButton() && ['start_service','pause_service','resume_service'].includes(interaction.customId)) {
-    await axios.post(GOOGLE_WEBHOOK, {
-      action: interaction.customId.replace('_service',''),
-      userId: user.id,
-      username: user.username,
-      time: now.toISOString()
-    });
-    activeMessages.set(interaction.id, interaction);
-    return interaction.reply({ content: `✅ ${interaction.customId.replace('_service','')} enregistré`, ephemeral: true });
+    try {
+      const res = await axios.post(GOOGLE_WEBHOOK, {
+        action: interaction.customId.replace('_service',''),
+        userId: user.id,
+        username: user.username,
+        time: now.toISOString()
+      });
+
+      const data = res.data;
+
+      if (data.error) {
+        return interaction.reply({ content: `❌ ${data.error}`, ephemeral: true });
+      }
+
+      activeMessages.set(interaction.id, interaction);
+      return interaction.reply({ content: `✅ ${interaction.customId.replace('_service','')} enregistré`, ephemeral: true });
+
+    } catch (err) {
+      return interaction.reply({ content: '❌ Erreur serveur. Veuillez réessayer.', ephemeral: true });
+    }
   }
 
-  // Bouton End
+  // ----- Bouton End -----
   if (interaction.isButton() && interaction.customId === 'end_service') {
-    const res = await axios.post(GOOGLE_WEBHOOK, { action: 'end', userId: user.id, time: now.toISOString() });
-    const data = res.data;
+    try {
+      const res = await axios.post(GOOGLE_WEBHOOK, { action: 'end', userId: user.id, time: now.toISOString() });
+      const data = res.data;
 
-    const embed = new EmbedBuilder()
-      .setTitle('🧾 Fin de service')
-      .addFields(
-        { name: 'Employé', value: `<@${user.id}>`, inline: true },
-        { name: 'Date', value: data.date, inline: true },
-        { name: 'Durée', value: data.hours, inline: true },
-        { name: 'Salaire', value: `${data.salary} €`, inline: true }
-      )
-      .setColor(0x2ecc71);
+      if (data.error) {
+        return interaction.reply({ content: `❌ ${data.error}`, ephemeral: true });
+      }
 
-    const payButton = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`paid_${user.id}_${Date.now()}`).setLabel('💰 Payé').setStyle(ButtonStyle.Success)
-    );
+      const embed = new EmbedBuilder()
+        .setTitle('🧾 Fin de service')
+        .addFields(
+          { name: 'Employé', value: `<@${user.id}>`, inline: true },
+          { name: 'Date', value: data.date, inline: true },
+          { name: 'Durée', value: data.hours, inline: true },
+          { name: 'Salaire', value: `${data.salary} €`, inline: true }
+        )
+        .setColor(0x2ecc71);
 
-    // Supprime les messages temporaires
-    activeMessages.forEach((msg, key) => {
-      if (msg.user.id === user.id) { try { msg.delete?.(); } catch{}; activeMessages.delete(key); }
-    });
+      const payButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`paid_${user.id}_${Date.now()}`).setLabel('💰 Payé').setStyle(ButtonStyle.Success)
+      );
 
-    return interaction.reply({ embeds: [embed], components: [payButton] });
+      // Nettoyage des messages temporaires
+      activeMessages.forEach((msg, key) => {
+        if (msg.user.id === user.id) {
+          try { msg.delete?.(); } catch {}
+          activeMessages.delete(key);
+        }
+      });
+
+      return interaction.reply({ embeds: [embed], components: [payButton] });
+
+    } catch {
+      return interaction.reply({ content: '❌ Erreur serveur. Veuillez réessayer.', ephemeral: true });
+    }
   }
 
-  // Bouton Payé
+  // ----- Bouton Payé -----
   if (interaction.isButton() && interaction.customId.startsWith('paid_')) {
     try {
       await interaction.message.delete();
@@ -105,7 +129,7 @@ client.on('interactionCreate', async interaction => {
 // ----- Connexion -----
 client.login(process.env.TOKEN);
 
-// ----- Mini serveur Express -----
+// ----- Serveur Express -----
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (req, res) => res.send('Bot Discord en ligne ✅'));
