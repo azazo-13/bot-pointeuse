@@ -176,11 +176,30 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// ----- Connexion -----
+// Connexion du bot Discord
 client.login(process.env.TOKEN);
 
-// ----- Serveur Express minimal -----
+// ===============================
+// 🔁 SERVEUR EXPRESS (Render)
+// ===============================
 const app = express();
 const PORT = process.env.PORT || 10000;
-app.get('/', (req, res) => res.send('Bot Discord en ligne ✅'));
-app.listen(PORT, () => console.log(`🌐 Serveur web lancé sur le port ${PORT}`));
+
+app.get('/', (req, res) => {
+  res.status(200).send('🤖 Bot Discord en ligne');
+});
+
+app.listen(PORT, () => {
+  console.log(`🌐 Serveur web actif sur le port ${PORT}`);
+});
+
+// ===============================
+// 🔁 AUTO-PING POUR RENDER
+// ===============================
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+
+setInterval(() => {
+  axios.get(SELF_URL)
+    .then(() => console.log('🔁 Ping Render OK'))
+    .catch(err => console.error('❌ Ping Render échoué :', err.message));
+}, 5 * 60 * 1000); // toutes les 5 minutes
