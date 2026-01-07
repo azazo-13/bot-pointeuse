@@ -1,228 +1,263 @@
 // ================== ANTI-CRASH ==================
-process.on('uncaughtException', err => console.error('❌ Uncaught Exception:', err));
-process.on('unhandledRejection', err => console.error('❌ Unhandled Rejection:', err));
+process.on('uncaughtException', console.error);
+process.on('unhandledRejection', console.error);
 
 // ================== IMPORTS ==================
+require('dotenv').config();
 const fs = require('fs');
-const axios = require('axios');
+const path = require('path');
 const express = require('express');
+const axios = require('axios');
+const sqlite3 = require('sqlite3').verbose();
+
 const {
     Client,
     GatewayIntentBits,
+    Events,
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    Events,
     SlashCommandBuilder,
     REST,
     Routes,
     EmbedBuilder
 } = require('discord.js');
-require('dotenv').config();
 
-// ================== VARIABLES ==================
-const DATA_FILE = './data.json';
-let data = { roles: { everyone: 10 }, users: {} };
+// ================== CONSTANTES ==================
+const PORT = process.env.PORT || 10000;
+const DB_FILE = './database.db';
+const BACKUP_DIR = './backups';
+const BACKUP_INTERVAL = 6 * 60 * 60 * 1000; // 6h
+const MAX_BACKUPS = 10;
 
-// ================== CHARGEMENT DATA ==================
-try {
-    if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4));
-    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    data = JSON.parse(raw);
-    if (!data.roles) data.roles = { everyone: 10 };
-    if (!data.users) data.users = {};
-} catch (err) {
-    console.error('❌ Erreur lecture data.json:', err);
+// ================== INIT FICHIERS ==================
+
+// Dossier backups
+if (!fs.existsSync(BACKUP_DIR)) {
+    fs.mkdirSync(BACKUP_DIR);
+    console.log('📁 Dossier backups créé');
 }
 
-function saveData() {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4));
+// Base SQLite
+const db = new sqlite3.Database(DB_FILE, err => {
+    if (!err) console.log('🗄️ Base SQLite prête');
+});
+
+// ================== INIT DB ==================
+db.serialize(() => {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            start INTEGER,
+            end INTEGER,
+            taux REAL
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS roles (
+            role TEXT PRIMARY KEY,
+            taux REAL
+        )
+    `);
+
+    db.run(`
+        INSERT OR IGNORE INTO roles (role, taux)
+        VALUES ('everyone', 10)
+    `);
+});
+
+// ================== BACKUP AUTO ==================
+function backupDatabase() {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = path.join(BACKUP_DIR, `backup-${timestamp}.db`);
+
+    fs.copyFile(DB_FILE, file, err => {
+        if (err) return console.error('❌ Backup échoué', err);
+        cleanupBackups();
+        console.log('💾 Backup créé');
+    });
 }
+
+function cleanupBackups() {
+    const files = fs.readdirSync(BACKUP_DIR)
+        .filter(f => f.endsWith('.db'))
+        .map(f => ({
+            name: f,
+            time: fs.statSync(path.join(BACKUP_DIR, f)).mtime
+        }))
+        .sort((a, b) => b.time - a.time);
+
+    files.slice(MAX_BACKUPS).forEach(f => {
+        fs.unlinkSync(path.join(BACKUP_DIR, f.name));
+    });
+}
+
+// Backup au démarrage + intervalle
+backupDatabase();
+setInterval(backupDatabase, BACKUP_INTERVAL);
 
 // ================== UTILS ==================
-function formatDuration(ms) {
+const formatDuration = ms => {
     const h = Math.floor(ms / 3600000);
-    const m = Math.floor((ms % 3600000) / 60000);
-    const s = Math.floor((ms % 60000) / 1000);
+    const m = Math.floor(ms % 3600000 / 60000);
+    const s = Math.floor(ms % 60000 / 1000);
     return `${h}h ${m}m ${s}s`;
-}
-
-function getUserTaux(member) {
-    const roleNames = member?.roles?.cache.map(r => r.name) || [];
-    const rolesValides = roleNames.filter(r => data.roles[r]);
-    if (rolesValides.length === 0) return data.roles['everyone'];
-    return Math.max(...rolesValides.map(r => data.roles[r]));
-}
+};
 
 // ================== CLIENT DISCORD ==================
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers
     ]
 });
 
-// ================== COMMANDES SLASH ==================
+// ================== SLASH COMMANDS ==================
 const commands = [
-    new SlashCommandBuilder().setName('create_pointeuse').setDescription('Créer la pointeuse'),
+    new SlashCommandBuilder()
+        .setName('create_pointeuse')
+        .setDescription('Créer la pointeuse'),
+
     new SlashCommandBuilder()
         .setName('add_role')
-        .setDescription('Ajouter un rôle avec un taux horaire')
-        .addStringOption(o => o.setName('role').setDescription('Nom du rôle').setRequired(true))
-        .addNumberOption(o => o.setName('taux').setDescription('Taux horaire €').setRequired(true))
+        .setDescription('Ajouter un rôle avec taux')
+        .addStringOption(o => o.setName('role').setRequired(true))
+        .addNumberOption(o => o.setName('taux').setRequired(true))
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-// Déploiement des commandes
 (async () => {
-    try {
-        console.log('🔄 Déploiement des commandes slash...');
-        await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body: commands });
-        console.log('✅ Commandes slash déployées');
-    } catch (err) {
-        console.error('❌ Erreur commandes slash:', err);
-    }
+    await rest.put(
+        Routes.applicationGuildCommands(
+            process.env.CLIENT_ID,
+            process.env.GUILD_ID
+        ),
+        { body: commands }
+    );
+    console.log('✅ Slash commands déployées');
 })();
 
 // ================== INTERACTIONS ==================
 client.on(Events.InteractionCreate, async interaction => {
-    const displayName = interaction.member?.displayName || interaction.user.username;
-    const channel = interaction.channel;
 
-    try {
-        // ---------- COMMANDES SLASH ----------
-        if (interaction.isChatInputCommand()) {
-            if (!interaction.guild) return interaction.reply({ content: '⚠️ Cette commande doit être utilisée dans un serveur.', ephemeral: true });
+    // ---------- SLASH ----------
+    if (interaction.isChatInputCommand()) {
+        if (interaction.commandName === 'create_pointeuse') {
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('start').setLabel('🟢 Début').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('end').setLabel('🔴 Fin').setStyle(ButtonStyle.Danger)
+            );
 
-            switch (interaction.commandName) {
-                case 'create_pointeuse':
-                    await interaction.deferReply();
-                    const row = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder().setCustomId('start_service').setLabel('🟢 Début de service').setStyle(ButtonStyle.Success),
-                        new ButtonBuilder().setCustomId('end_service').setLabel('🔴 Fin de service').setStyle(ButtonStyle.Danger)
+            const embed = new EmbedBuilder()
+                .setTitle('🕒 Pointeuse')
+                .setDescription('Démarrer ou terminer le service')
+                .setColor('Blue');
+
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (interaction.commandName === 'add_role') {
+            db.run(
+                `INSERT OR REPLACE INTO roles (role, taux) VALUES (?, ?)`,
+                [interaction.options.getString('role'), interaction.options.getNumber('taux')]
+            );
+            return interaction.reply('✅ Rôle ajouté');
+        }
+    }
+
+    // ---------- BOUTONS ----------
+    if (interaction.isButton()) {
+        const uid = interaction.user.id;
+        const name = interaction.member.displayName;
+
+        // START
+        if (interaction.customId === 'start') {
+            db.get(
+                `SELECT * FROM sessions WHERE user_id = ? AND end IS NULL`,
+                [uid],
+                (_, row) => {
+                    if (row) {
+                        return interaction.reply({
+                            content: '⚠️ Tu es déjà en service.',
+                            ephemeral: true
+                        });
+                    }
+
+                    db.get(
+                        `SELECT MAX(taux) as taux FROM roles`,
+                        [],
+                        (_, r) => {
+                            const taux = r?.taux || 10;
+
+                            db.run(
+                                `INSERT INTO sessions (user_id, start, taux)
+                                 VALUES (?, ?, ?)`,
+                                [uid, Date.now(), taux]
+                            );
+
+                            const embed = new EmbedBuilder()
+                                .setTitle('🟢 Début de service')
+                                .setDescription(`👤 ${name}\n💶 ${taux}€/h`)
+                                .setColor('Green')
+                                .setTimestamp();
+
+                            interaction.channel.send({ embeds: [embed] });
+                        }
                     );
+                }
+            );
+        }
+
+        // END
+        if (interaction.customId === 'end') {
+            db.get(
+                `SELECT * FROM sessions WHERE user_id = ? AND end IS NULL`,
+                [uid],
+                (_, session) => {
+                    if (!session) return;
+
+                    const end = Date.now();
+                    const duration = end - session.start;
+                    const pay = (duration / 3600000) * session.taux;
+
+                    db.run(
+                        `UPDATE sessions SET end = ? WHERE id = ?`,
+                        [end, session.id]
+                    );
+
                     const embed = new EmbedBuilder()
-                        .setTitle('🕒 Pointeuse')
-                        .setDescription('🟢 Commencer / 🔴 Terminer le service')
-                        .setColor('Blue')
+                        .setTitle('🔴 Fin de service')
+                        .setColor('Red')
+                        .addFields(
+                            { name: 'Employé', value: name },
+                            { name: 'Durée', value: formatDuration(duration), inline: true },
+                            { name: 'Paye', value: `${pay.toFixed(2)}€`, inline: true }
+                        )
                         .setTimestamp();
-                    await interaction.editReply({ embeds: [embed], components: [row] });
-                    break;
 
-                case 'add_role':
-                    const roleName = interaction.options.getString('role');
-                    const taux = interaction.options.getNumber('taux');
-                    data.roles[roleName] = taux;
-                    saveData();
-                    await interaction.reply(`✅ Rôle **${roleName}** ajouté (${taux}€/h)`);
-                    break;
-            }
-        }
-
-        // ---------- BOUTONS ----------
-        if (interaction.isButton()) {
-            const sessions = data.users[interaction.user.id] || [];
-
-            if (interaction.customId === 'start_service') {
-                const taux = getUserTaux(interaction.member);
-                const session = { start: Date.now(), end: null, taux };
-                sessions.push(session);
-                data.users[interaction.user.id] = sessions;
-                saveData();
-
-                const embedStart = new EmbedBuilder()
-                    .setTitle('🟢 Début de service')
-                    .setDescription(`👤 ${displayName}\n💶 ${taux}€/h`)
-                    .setColor('Blue')
-                    .setTimestamp();
-                const msg = await channel.send({ embeds: [embedStart] });
-                session.startMessageId = msg.id;
-                saveData();
-            }
-
-            if (interaction.customId === 'end_service') {
-                const session = sessions.find(s => !s.end);
-                if (!session) return;
-
-                session.end = Date.now();
-                saveData();
-
-                if (session.startMessageId) {
-                    const m = await channel.messages.fetch(session.startMessageId).catch(() => null);
-                    if (m) await m.delete().catch(() => {});
+                    interaction.channel.send({ embeds: [embed] });
                 }
-
-                const duration = session.end - session.start;
-                const pay = (duration / 3600000) * session.taux;
-
-                const embedEnd = new EmbedBuilder()
-                    .setTitle('🔴 Service terminé')
-                    .setColor('Red')
-                    .addFields(
-                        { name: 'Employé', value: displayName },
-                        { name: 'Durée', value: formatDuration(duration), inline: true },
-                        { name: 'Paye', value: `${pay.toFixed(2)}€`, inline: true },
-                        { name: 'Date', value: `<t:${Math.floor(session.end / 1000)}:F>` }
-                    )
-                    .setFooter({ text: 'Cliquez sur le bouton pour valider le paiement' })
-                    .setTimestamp();
-
-                const rowEnd = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`valider_paye_${interaction.user.id}`).setLabel('✅ Valider le paiement').setStyle(ButtonStyle.Success)
-                );
-
-                await channel.send({ embeds: [embedEnd], components: [rowEnd] });
-            }
-
-            if (interaction.customId.startsWith('valider_paye_')) {
-                if (!interaction.member.roles.cache.some(r => r.name === 'Patron')) {
-                    const msg = await channel.send('❌ Seul le patron peut valider.');
-                    setTimeout(() => msg.delete().catch(() => {}), 2 * 60 * 1000);
-                    return;
-                }
-
-                const embedValidated = EmbedBuilder.from(interaction.message.embeds[0])
-                    .setColor('Green')
-                    .setFooter({ text: '✅ Paiement validé' })
-                    .setTimestamp();
-                await interaction.update({ embeds: [embedValidated], components: [] });
-
-                setTimeout(async () => {
-                    const m = await channel.messages.fetch(interaction.message.id).catch(() => null);
-                    if (m) await m.delete().catch(() => {});
-                }, 10 * 60 * 1000);
-            }
+            );
         }
-
-    } catch (err) {
-        console.error('❌ Erreur InteractionCreate:', err);
-        if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: '⚠️ Une erreur est survenue.', ephemeral: true });
     }
 });
 
 // ================== READY ==================
 client.once(Events.ClientReady, () => {
-    console.log(`🤖 Connecté en tant que ${client.user.tag}`);
-    client.on('error', console.error);
-    client.on('warn', console.warn);
+    console.log(`🤖 Bot connecté : ${client.user.tag}`);
 });
 
-// ================== LOGIN DISCORD ==================
-console.log("🔄 Connexion au bot Discord...");
-client.login(process.env.TOKEN)
-    .then(() => console.log("✅ Login Discord réussi"))
-    .catch(err => console.error("❌ Login Discord échoué:", err));
+// ================== LOGIN ==================
+client.login(process.env.TOKEN);
 
-// ================== EXPRESS ==================
+// ================== EXPRESS (RENDER) ==================
 const app = express();
-const PORT = process.env.PORT || 10000;
-app.get('/', (_, res) => res.send('🤖 Bot en ligne'));
-app.listen(PORT, () => console.log(`🌐 Serveur actif sur ${PORT}`));
+app.get('/', (_, res) => res.send('Bot en ligne'));
+app.listen(PORT);
 
-// Ping automatique Render
 setInterval(() => {
     axios.get(`http://localhost:${PORT}`).catch(() => {});
-}, 5 * 60 * 1000);
+}, 240000);
