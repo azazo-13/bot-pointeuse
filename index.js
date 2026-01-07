@@ -6,7 +6,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 
 // 🔗 Webhooks Apps Script
 const GOOGLE_WEBHOOK = "https://script.google.com/macros/s/AKfycbxpYE6z-UUIsl6GPU-U4wer4BkAAbInL0SHgmnKprihOaB7j63rTMZ8bfdAkW24KN3nCw/exec";
-const GOOGLE_WEBHOOK_UPDATE_TAUX = "https://script.google.com/macros/s/TON_UPDATE_TAUX_WEBAPP/exec";
+const GOOGLE_WEBHOOK_UPDATE_TAUX = "https://script.google.com/macros/s/AKfycbwN7gdMZzdCgtuP3HUEPTvUIdSNr_LyCUMTinU2vzRxeydtq4TM-HKVPckvAOTFsC5Epg/exec";
 
 // ----- Commandes slash -----
 const commands = [
