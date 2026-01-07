@@ -30,63 +30,62 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers // <- Nécessaire pour les rôles
     ]
 });
-
-// ================== LOG DISCORD ==================
-let botReady = false;
-
-client.on('error', err => console.error('❌ Discord client error:', err));
-client.on('warn', warn => console.warn('⚠️ Discord client warning:', warn));
-
-client.once(Events.ClientReady, () => {
-    console.log(`🤖 Bot Discord prêt : ${client.user.tag}`);
-    botReady = true;
-});
-
-// Intervalle statut bot toutes les 30s
-setInterval(() => {
-    if (!botReady) console.log("⚠️ Bot Discord pas encore prêt...");
-    else console.log(`💓 Bot Discord en ligne (${new Date().toLocaleTimeString()})`);
-}, 30000);
 
 // ================== DATA ==================
 const DATA_FILE = './data.json';
 let data = JSON.parse(fs.readFileSync(DATA_FILE));
-function saveData() { fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4)); }
-function formatDuration(ms) { 
-    const h=Math.floor(ms/3600000); 
-    const m=Math.floor((ms%3600000)/60000); 
-    const s=Math.floor((ms%60000)/1000); 
-    return `${h}h ${m}m ${s}s`; 
+
+function saveData() {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4));
 }
-function getUserTaux(member) { 
-    const roleNames = member.roles.cache.map(r=>r.name); 
-    const rolesValides = roleNames.filter(r=>data.roles[r]); 
-    if(rolesValides.length===0) return data.roles['everyone']; 
-    return Math.max(...rolesValides.map(r=>data.roles[r])); 
+
+function formatDuration(ms) {
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${h}h ${m}m ${s}s`;
+}
+
+// ================== TAUX HORAIRE ==================
+function getUserTaux(member) {
+    const roleNames = member.roles.cache.map(r => r.name);
+    const rolesValides = roleNames.filter(r => data.roles[r]);
+    if (rolesValides.length === 0) return data.roles['everyone'];
+    return Math.max(...rolesValides.map(r => data.roles[r]));
 }
 
 // ================== COMMANDES SLASH ==================
 const commands = [
-    new SlashCommandBuilder().setName('create_pointeuse').setDescription('Créer la pointeuse'),
-    new SlashCommandBuilder().setName('add_role').setDescription('Ajouter un rôle avec un taux horaire')
-        .addStringOption(o=>o.setName('role').setDescription('Nom du rôle').setRequired(true))
-        .addNumberOption(o=>o.setName('taux').setDescription('Taux horaire €').setRequired(true)),
-    new SlashCommandBuilder().setName('summary').setDescription('Résumé des heures et payes')
-].map(c=>c.toJSON());
+    new SlashCommandBuilder()
+        .setName('create_pointeuse')
+        .setDescription('Créer la pointeuse'),
+    new SlashCommandBuilder()
+        .setName('add_role')
+        .setDescription('Ajouter un rôle avec un taux horaire')
+        .addStringOption(o => o.setName('role').setDescription('Nom du rôle').setRequired(true))
+        .addNumberOption(o => o.setName('taux').setDescription('Taux horaire €').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('summary')
+        .setDescription('Résumé des heures et payes')
+].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-(async()=>{
-    try{
+
+(async () => {
+    try {
         console.log('🔄 Déploiement des commandes slash...');
         await rest.put(
             Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
             { body: commands }
         );
         console.log('✅ Commandes slash déployées');
-    } catch(e){ console.error('❌ Erreur commandes slash:', e); }
+    } catch (e) {
+        console.error('❌ Erreur commandes slash:', e);
+    }
 })();
 
 // ================== INTERACTIONS ==================
@@ -216,35 +215,38 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
+// ================== READY ==================
+let botReady = false;
+client.once(Events.ClientReady, () => {
+    console.log(`🤖 Connecté en tant que ${client.user.tag}`);
+    botReady = true;
+
+    client.on('error', console.error);
+    client.on('warn', console.warn);
+});
+
+// Vérification du statut toutes les 30 secondes
+setInterval(() => {
+    if (!botReady) {
+        console.log("⚠️ Bot Discord pas encore prêt...");
+    } else {
+        console.log(`💓 Bot Discord en ligne (${new Date().toLocaleTimeString()})`);
+    }
+}, 30000);
+
+// ================== LOGIN DISCORD ==================
+console.log("🔄 Connexion au bot Discord...");
+client.login(process.env.TOKEN)
+    .then(() => console.log("✅ Login Discord réussi"))
+    .catch(err => console.error("❌ Login Discord échoué:", err));
+
 // ================== EXPRESS ==================
 const app = express();
 const PORT = process.env.PORT || 10000;
-app.get('/', (_,res)=>res.send('🤖 Bot en ligne'));
-app.listen(PORT,()=>console.log(`🌐 Serveur web actif sur ${PORT}`));
-setInterval(()=>{ axios.get(`http://localhost:${PORT}`).catch(()=>{}); },5*60*1000);
+app.get('/', (_, res) => res.send('🤖 Bot en ligne'));
+app.listen(PORT, () => console.log(`🌐 Serveur actif sur ${PORT}`));
 
-// ================== CHECK BOT + SERVEUR ==================
-const checkStatus = async () => {
-    let webOk = false;
-    try {
-        await axios.get(`http://localhost:${PORT}`);
-        webOk = true;
-    } catch (err) {
-        webOk = false;
-    }
-
-    if(botReady && webOk){
-        console.log(`✅ Tout est en ligne ! Bot Discord et serveur Web OK (${new Date().toLocaleTimeString()})`);
-    } else {
-        const status = [];
-        if(!botReady) status.push("Bot Discord pas prêt");
-        if(!webOk) status.push("Serveur Web KO");
-        console.log(`⚠️ Problème détecté : ${status.join(' | ')} (${new Date().toLocaleTimeString()})`);
-    }
-};
-
-// Ping toutes les 30 secondes
-setInterval(checkStatus, 30*1000);
-
-// Premier check immédiat
-checkStatus();
+// Ping automatique Render pour éviter la mise en veille
+setInterval(() => {
+    axios.get(`http://localhost:${PORT}`).catch(() => {});
+}, 5 * 60 * 1000);
