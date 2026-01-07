@@ -118,7 +118,6 @@ if (interaction.commandName === 'create_pointeuse') {
             await interaction.reply({ content: '⚠️ Une erreur est survenue.', ephemeral: true });
         }
     }
-}
 
 
         if(interaction.commandName === 'add_role') {
