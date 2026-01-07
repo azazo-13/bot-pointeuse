@@ -146,7 +146,8 @@ client.on('interactionCreate', async interaction => {
             messageText = `🟢 Service pris ${displayName} ! Bon courage !`;
             break;
           case 'end_service':
-            userState.set(userId, { status: 'cooldown', cooldownEnd: new Date(Date.now() + 2*60*1000) });
+            userState.set(userId, { status: 'active' }); // pas de cooldown
+
 
             const embed = new EmbedBuilder()
               .setTitle('🧾 Fin de service')
