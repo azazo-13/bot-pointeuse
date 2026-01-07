@@ -136,40 +136,35 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 // ================== INTERACTIONS ==================
 client.on(Events.InteractionCreate, async interaction => {
 
-    if (!interaction.isChatInputCommand()) return;
+    // ================== SLASH COMMANDS ==================
+    if (interaction.isChatInputCommand()) {
 
-    if (interaction.commandName === 'create_pointeuse') {
+        if (interaction.commandName === 'create_pointeuse') {
+            await interaction.deferReply();
 
-        // 🔥 OBLIGATOIRE (anti-timeout Discord)
-        await interaction.deferReply();
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('start')
+                    .setLabel('🟢 Début de service')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('end')
+                    .setLabel('🔴 Fin de service')
+                    .setStyle(ButtonStyle.Danger)
+            );
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('start')
-                .setLabel('🟢 Début de service')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId('end')
-                .setLabel('🔴 Fin de service')
-                .setStyle(ButtonStyle.Danger)
-        );
+            const embed = new EmbedBuilder()
+                .setTitle('🕒 Pointeuse')
+                .setDescription('Démarrer ou terminer un service')
+                .setColor('Blue')
+                .setTimestamp();
 
-        const embed = new EmbedBuilder()
-            .setTitle('🕒 Pointeuse')
-            .setDescription('Démarrer ou terminer un service')
-            .setColor('Blue');
+            return interaction.editReply({
+                embeds: [embed],
+                components: [row]
+            });
+        }
 
-        await interaction.editReply({
-            embeds: [embed],
-            components: [row]
-        });
-    }
-});
-
-client.on(Events.InteractionCreate, async interaction => {
-
-    if (!interaction.isChatInputCommand()) return;
-    
         if (interaction.commandName === 'add_role') {
             db.prepare(`
                 INSERT OR REPLACE INTO roles (role, taux)
@@ -182,7 +177,6 @@ client.on(Events.InteractionCreate, async interaction => {
             return interaction.reply('✅ Rôle ajouté');
         }
     }
-
     // BOUTONS
     if (interaction.isButton()) {
         const uid = interaction.user.id;
