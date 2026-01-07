@@ -134,22 +134,37 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 })();
 
 // ================== INTERACTIONS ==================
-client.on(Events.InteractionCreate, interaction => {
+client.on(Events.InteractionCreate, async interaction => {
 
-    // SLASH
-    if (interaction.isChatInputCommand()) {
-        if (interaction.commandName === 'create_pointeuse') {
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('start').setLabel('🟢 Début').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('end').setLabel('🔴 Fin').setStyle(ButtonStyle.Danger)
-            );
+    if (!interaction.isChatInputCommand()) return;
 
-            const embed = new EmbedBuilder()
-                .setTitle('🕒 Pointeuse')
-                .setColor('Blue');
+    if (interaction.commandName === 'create_pointeuse') {
 
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
+        // 🔥 OBLIGATOIRE (anti-timeout Discord)
+        await interaction.deferReply();
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('start')
+                .setLabel('🟢 Début de service')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId('end')
+                .setLabel('🔴 Fin de service')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        const embed = new EmbedBuilder()
+            .setTitle('🕒 Pointeuse')
+            .setDescription('Démarrer ou terminer un service')
+            .setColor('Blue');
+
+        await interaction.editReply({
+            embeds: [embed],
+            components: [row]
+        });
+    }
+});
 
         if (interaction.commandName === 'add_role') {
             db.prepare(`
