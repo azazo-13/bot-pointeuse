@@ -1,9 +1,9 @@
 {
   "roles": {
-    "everyone": 6000 ,
-    "test1": 7000 ,
-    "test2": 8000 , 
-    "test3": 9000 , 
+    "everyone": 6000,
+    "test1": 7000,
+    "test2": 8000, 
+    "test3": 9000 
   },
   "users": {}
 }
