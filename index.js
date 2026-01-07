@@ -4,7 +4,8 @@ const {
 } = require('discord.js');
 const axios = require('axios');
 const express = require('express');
-
+// Stockage temporaire des grades à ajouter ou mettre à jour
+const pendingGrades = new Map(); // { grade: taux }
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
 
 // 🔗 Webhook unique Apps Script
@@ -83,65 +84,68 @@ client.on('interactionCreate', async interaction => {
   }
 
  
-// ----- /settaux -----
-if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
-  // Vérifie si l'utilisateur a la permission admin
-  if (!interaction.member.permissions.has("Administrator")) {
-    return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
-  }
-
-  const grade = interaction.options.getString('grade');
-  const taux = interaction.options.getNumber('taux');
-
-  console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
-
-  try {
-    // Répondre immédiatement pour éviter le timeout Discord
-    await interaction.deferReply({ ephemeral: true });
-
-    // Envoi au Web App
-    await axios.post(
-      GOOGLE_WEBHOOK,
-      { type: "update_taux", grade, taux },  // <-- corps de la requête
-      { headers: { "Content-Type": "application/json" } } // <-- options
-    );
-
-    // Modification de la réponse différée
-    return interaction.editReply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €` });
-  } catch (err) {
-    console.error(err);
-    return interaction.editReply({ content: "❌ Impossible de mettre à jour le taux" });
-  }
-}
-
 // ----- /addgrade -----
 if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') {
-  // Vérifie si l'utilisateur a la permission admin
   if (!interaction.member.permissions.has("Administrator")) {
-    return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
+    return interaction.reply({ content: "❌ Permission admin requise", flags: 64 });
   }
 
   const grade = interaction.options.getString('grade');
   const taux = interaction.options.getNumber('taux');
 
-  console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
+  console.log("Stockage grade dans le bot :", { grade, taux });
+  
+  // Stocker le grade dans pendingGrades
+  pendingGrades.set(grade, taux);
 
-  try {
-    // Répondre immédiatement pour éviter le timeout Discord
-    await interaction.deferReply({ ephemeral: true });
+  await interaction.reply({ 
+    content: `✅ Grade "${grade}" ajouté localement avec un taux de ${taux} €`,
+    flags: 64
+  });
 
-    // Envoi au Web App
-    await axios.post(
-      GOOGLE_WEBHOOK,
-      { type: "update_taux", grade, taux },  // <-- corps de la requête
-      { headers: { "Content-Type": "application/json" } } // <-- options
-    );
+  // Envoi immédiat au Google Sheet
+  flushGradesToGoogleSheet();
+}
 
-    // Modification de la réponse différée
-    return interaction.editReply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €` });
-  } catch (err) {
-    console.error(err);
-    return interaction.editReply({ content: "❌ Impossible d'ajouter le grade" });
+// ----- /settaux -----
+if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
+  if (!interaction.member.permissions.has("Administrator")) {
+    return interaction.reply({ content: "❌ Permission admin requise", flags: 64 });
+  }
+
+  const grade = interaction.options.getString('grade');
+  const taux = interaction.options.getNumber('taux');
+
+  console.log("Stockage taux dans le bot :", { grade, taux });
+
+  // Mettre à jour le grade dans pendingGrades
+  pendingGrades.set(grade, taux);
+
+  await interaction.reply({ 
+    content: `✅ Taux du grade "${grade}" mis à jour localement à ${taux} €`,
+    flags: 64
+  });
+
+  // Envoi immédiat au Google Sheet
+  flushGradesToGoogleSheet();
+}
+
+// ----- Fonction d'envoi au Google Sheet -----
+async function flushGradesToGoogleSheet() {
+  if (pendingGrades.size === 0) return;
+
+  for (const [grade, taux] of pendingGrades.entries()) {
+    try {
+      await axios.post(
+        GOOGLE_WEBHOOK,
+        { type: "update_taux", grade, taux },
+        { headers: { "Content-Type": "application/json" } }
+      );
+      console.log(`✅ Grade "${grade}" envoyé au Sheet avec taux ${taux}`);
+      pendingGrades.delete(grade); // suppression après envoi réussi
+    } catch (err) {
+      console.error(`❌ Erreur pour grade "${grade}" :`, err.message);
+    }
   }
 }
 
