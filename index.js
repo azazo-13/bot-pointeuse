@@ -72,23 +72,23 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 client.on('interactionCreate', async interaction => {
 
   // ----- Commandes Slash -----
-  if (interaction.isChatInputCommand()) {
+if (interaction.commandName === 'pointeuse') {
+  await interaction.deferReply({ ephemeral: true });
 
-    // Menu pointeuse
-    if (interaction.commandName === 'pointeuse') {
-      const embed = new EmbedBuilder()
-        .setTitle('🕒 Pointeuse générale')
-        .setDescription('Cliquez sur les boutons ci-dessous pour gérer votre service.\n\nGrades disponibles : ' + Object.keys(data.grades).join(', '))
-        .setColor(0x3498db)
-        .setFooter({ text: 'Pointeuse automatique' });
+  const embed = new EmbedBuilder()
+    .setTitle('🕒 Pointeuse générale')
+    .setDescription('Gérez votre service en cliquant sur les boutons ci-dessous.\n\n**Grades disponibles** : everyone')
+    .setColor(0x3498db)
+    .setFooter({ text: 'Pointeuse automatique' });
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Prendre son service').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('end_service').setLabel('⏹️ Fin de service').setStyle(ButtonStyle.Danger)
-      );
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Prendre son service').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('end_service').setLabel('⏹️ Fin de service').setStyle(ButtonStyle.Danger)
+  );
 
-      return interaction.reply({ embeds: [embed], components: [row] });
-    }
+  await interaction.editReply({ embeds: [embed], components: [row] });
+}
+
 
     // Ajouter grade
     if (interaction.commandName === 'addgrade') {
