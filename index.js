@@ -2,7 +2,7 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 const axios = require('axios');
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
 
-const GOOGLE_WEBHOOK = "https://script.google.com/macros/s/.../exec";
+const GOOGLE_WEBHOOK = "https://script.google.com/macros/s/AKfycbxpYE6z-UUIsl6GPU-U4wer4BkAAbInL0SHgmnKprihOaB7j63rTMZ8bfdAkW24KN3nCw/exec";
 const pendingGrades = new Map();
 const userMessages = new Map();
 const userState = new Map(); // "active" ou "cooldown"
