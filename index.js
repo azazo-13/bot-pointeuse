@@ -1,64 +1,84 @@
+// ================== ANTI-CRASH ==================
+process.on('uncaughtException', err => {
+    console.error('❌ Uncaught Exception:', err);
+});
+process.on('unhandledRejection', err => {
+    console.error('❌ Unhandled Rejection:', err);
+});
+
+// ================== LOG ENV ==================
 console.log("TOKEN présent :", process.env.TOKEN ? "OUI" : "NON");
 console.log("CLIENT_ID présent :", process.env.CLIENT_ID ? "OUI" : "NON");
+console.log("GUILD_ID présent :", process.env.GUILD_ID ? "OUI" : "NON");
+
+// ================== IMPORTS ==================
 const fs = require('fs');
 const axios = require('axios');
 const express = require('express');
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, Events, SlashCommandBuilder, REST, Routes, EmbedBuilder } = require('discord.js');
-require('dotenv').config();
+const {
+    Client,
+    GatewayIntentBits,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    Events,
+    SlashCommandBuilder,
+    REST,
+    Routes,
+    EmbedBuilder
+} = require('discord.js');
 
-// ----------------- Config -----------------
+// ================== CLIENT ==================
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
 });
 
+// ================== DATA ==================
 const DATA_FILE = './data.json';
 let data = JSON.parse(fs.readFileSync(DATA_FILE));
 
-// ----------------- Utilitaires -----------------
 function saveData() {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4));
 }
 
 function formatDuration(ms) {
-    const hours = Math.floor(ms / 3600000);
-    const minutes = Math.floor((ms % 3600000) / 60000);
-    const seconds = Math.floor((ms % 60000) / 1000);
-    return `${hours}h ${minutes}m ${seconds}s`;
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${h}h ${m}m ${s}s`;
 }
 
-// ----------------- Calcul taux horaire -----------------
+// ================== TAUX HORAIRE ==================
 function getUserTaux(member) {
-    const userRoles = member.roles.cache.map(r => r.name);
-    const rolesValides = userRoles.filter(r => Object.keys(data.roles).includes(r));
+    const roleNames = member.roles.cache.map(r => r.name);
+    const rolesValides = roleNames.filter(r => data.roles[r]);
     if (rolesValides.length === 0) return data.roles['everyone'];
     return Math.max(...rolesValides.map(r => data.roles[r]));
 }
 
-// ----------------- Commandes slash -----------------
+// ================== COMMANDES ==================
 const commands = [
     new SlashCommandBuilder()
         .setName('create_pointeuse')
-        .setDescription('Créer une pointeuse avec boutons Start et Fin Service'),
+        .setDescription('Créer la pointeuse'),
 
     new SlashCommandBuilder()
         .setName('add_role')
         .setDescription('Ajouter un rôle avec un taux horaire')
-        .addStringOption(option =>
-            option.setName('role')
-                  .setDescription('Nom du rôle Discord')
-                  .setRequired(true))
-        .addNumberOption(option =>
-            option.setName('taux')
-                  .setDescription('Taux horaire en €')
-                  .setRequired(true)),
+        .addStringOption(o => o.setName('role').setDescription('Nom du rôle').setRequired(true))
+        .addNumberOption(o => o.setName('taux').setDescription('Taux horaire €').setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('summary')
-        .setDescription('Afficher le résumé des heures et payes de tous les utilisateurs')
-].map(cmd => cmd.toJSON());
+        .setDescription('Résumé des heures et payes')
+].map(c => c.toJSON());
 
-// Déployer les commandes sur le serveur
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
 (async () => {
     try {
         console.log('🔄 Déploiement des commandes slash...');
@@ -66,61 +86,49 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
             Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
             { body: commands }
         );
-        console.log('✅ Commandes slash déployées !');
-    } catch (error) {
-        console.error('❌ Erreur lors du déploiement des commandes :', error);
+        console.log('✅ Commandes slash déployées');
+    } catch (e) {
+        console.error('❌ Erreur commandes slash:', e);
     }
 })();
 
-// ----------------- Gestion interactions -----------------
+// ================== INTERACTIONS ==================
 client.on(Events.InteractionCreate, async interaction => {
-
-    const displayName = interaction.member?.displayName || interaction.user.username;
     const channel = interaction.channel;
+    const displayName = interaction.member?.displayName || interaction.user.username;
 
-    // ---------------- Commandes slash ----------------
+    // ---------- SLASH ----------
     if (interaction.isChatInputCommand()) {
+
         if (interaction.commandName === 'create_pointeuse') {
-            const row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('start_service')
-                        .setLabel('🟢 Début de service')
-                        .setStyle(ButtonStyle.Success),
-                    new ButtonBuilder()
-                        .setCustomId('end_service')
-                        .setLabel('🔴 Fin de service')
-                        .setStyle(ButtonStyle.Danger)
-                );
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('start_service').setLabel('🟢 Début de service').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('end_service').setLabel('🔴 Fin de service').setStyle(ButtonStyle.Danger)
+            );
 
             const embed = new EmbedBuilder()
-                .setTitle('🕒 Pointeuse Automatique')
-                .setDescription('Cliquez sur **🟢 Début de service** pour commencer et sur **🔴 Fin de service** pour terminer.')
+                .setTitle('🕒 Pointeuse')
+                .setDescription('🟢 Commencer / 🔴 Terminer le service')
                 .setColor('Blue')
                 .setTimestamp();
 
-            await interaction.reply({ embeds: [embed], components: [row] });
+            return interaction.reply({ embeds: [embed], components: [row] });
         }
 
         if (interaction.commandName === 'add_role') {
-            const roleName = interaction.options.getString('role');
+            const role = interaction.options.getString('role');
             const taux = interaction.options.getNumber('taux');
-            data.roles[roleName] = taux;
+            data.roles[role] = taux;
             saveData();
-            await interaction.reply(`✅ Le rôle **${roleName}** a été ajouté avec un taux horaire de **${taux}€**.`);
+            return interaction.reply(`✅ Rôle **${role}** ajouté (${taux}€/h)`);
         }
 
         if (interaction.commandName === 'summary') {
-            const embed = new EmbedBuilder()
-                .setTitle('📊 Résumé des heures et payes')
-                .setColor('Green');
+            const embed = new EmbedBuilder().setTitle('📊 Résumé').setColor('Green');
 
             for (const userId in data.users) {
-                const sessions = data.users[userId];
-                let totalMs = 0;
-                let totalPay = 0;
-
-                sessions.forEach(s => {
+                let totalMs = 0, totalPay = 0;
+                data.users[userId].forEach(s => {
                     if (s.end) {
                         totalMs += s.end - s.start;
                         totalPay += ((s.end - s.start) / 3600000) * s.taux;
@@ -128,128 +136,118 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
 
                 const member = await interaction.guild.members.fetch(userId).catch(() => null);
-                const name = member ? member.displayName : 'Utilisateur supprimé';
-
                 embed.addFields({
-                    name,
-                    value: `Heures totales : **${(totalMs/3600000).toFixed(2)}h**\nPaye totale : **${totalPay.toFixed(2)}€**`
+                    name: member ? member.displayName : 'Utilisateur inconnu',
+                    value: `⏱ ${(totalMs / 3600000).toFixed(2)}h\n💰 ${totalPay.toFixed(2)}€`
                 });
             }
-
-            await interaction.reply({ embeds: [embed] });
+            return interaction.reply({ embeds: [embed] });
         }
     }
 
-    // ---------------- Gestion boutons ----------------
+    // ---------- BOUTONS ----------
     if (interaction.isButton()) {
-        const taux = getUserTaux(interaction.member);
 
-        // --- Début de service ---
+        // ----- START -----
         if (interaction.customId === 'start_service') {
+            const taux = getUserTaux(interaction.member);
             if (!data.users[interaction.user.id]) data.users[interaction.user.id] = [];
+
             const session = { start: Date.now(), end: null, taux };
             data.users[interaction.user.id].push(session);
             saveData();
 
-            const embedStart = new EmbedBuilder()
-                .setTitle(`🟢 Début de service : ${displayName}`)
-                .setDescription(`Taux horaire : **${taux}€**`)
+            const embed = new EmbedBuilder()
+                .setTitle(`🟢 Début de service`)
+                .setDescription(`👤 ${displayName}\n💶 ${taux}€/h`)
                 .setColor('Blue')
                 .setTimestamp();
 
-            const message = await channel.send({ embeds: [embedStart] });
-            session.startMessageId = message.id;
+            const msg = await channel.send({ embeds: [embed] });
+            session.startMessageId = msg.id;
             saveData();
             return;
         }
 
-        // --- Fin de service ---
+        // ----- END -----
         if (interaction.customId === 'end_service') {
             const sessions = data.users[interaction.user.id];
-            if (!sessions || sessions.length === 0) return channel.send(`⚠️ ${displayName}, vous n'avez pas de session en cours.`);
+            if (!sessions) return;
 
-            const session = sessions.find(s => s.end === null);
-            if (!session) return channel.send(`⚠️ ${displayName}, vous n'avez pas de session en cours.`);
+            const session = sessions.find(s => !s.end);
+            if (!session) return;
 
             session.end = Date.now();
-            const durationMs = session.end - session.start;
-            const hoursWorked = durationMs / 3600000;
-            const pay = hoursWorked * session.taux;
             saveData();
 
-            // Supprimer message début
             if (session.startMessageId) {
-                const startMessage = await channel.messages.fetch(session.startMessageId).catch(() => null);
-                if (startMessage) await startMessage.delete().catch(() => {});
+                const m = await channel.messages.fetch(session.startMessageId).catch(() => null);
+                if (m) await m.delete().catch(() => {});
             }
 
-            // Embed fin de service unique
-            const embedEnd = new EmbedBuilder()
-                .setTitle(`🔴 Service terminé : ${displayName}`)
+            const duration = session.end - session.start;
+            const pay = (duration / 3600000) * session.taux;
+
+            const embed = new EmbedBuilder()
+                .setTitle(`🔴 Service terminé`)
                 .setColor('Red')
-                .setDescription(`Résumé de la session`)
                 .addFields(
-                    { name: 'Durée', value: `⏱ ${formatDuration(durationMs)}`, inline: true },
-                    { name: 'Taux horaire', value: `💶 ${session.taux}€`, inline: true },
-                    { name: 'Paye', value: `💰 ${pay.toFixed(2)}€`, inline: true },
-                    { name: 'Fin de service', value: `<t:${Math.floor(session.end/1000)}:F>`, inline: false }
+                    { name: 'Employé', value: displayName },
+                    { name: 'Durée', value: formatDuration(duration), inline: true },
+                    { name: 'Paye', value: `${pay.toFixed(2)}€`, inline: true },
+                    { name: 'Date', value: `<t:${Math.floor(session.end / 1000)}:F>` }
                 )
-                .setFooter({ text: 'Cliquez sur le bouton pour valider le paiement' })
                 .setTimestamp();
 
-            const row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`valider_paye_${interaction.user.id}_${Date.now()}`)
-                        .setLabel('✅ Valider le paiement')
-                        .setStyle(ButtonStyle.Success)
-                );
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`valider_paye_${interaction.user.id}`)
+                    .setLabel('✅ Valider le paiement')
+                    .setStyle(ButtonStyle.Success)
+            );
 
-            await channel.send({ embeds: [embedEnd], components: [row] });
-            return;
+            return channel.send({ embeds: [embed], components: [row] });
         }
 
-        // --- Validation patron ---
+        // ----- VALIDATION -----
         if (interaction.customId.startsWith('valider_paye_')) {
             if (!interaction.member.roles.cache.some(r => r.name === 'Patron')) {
-                const msg = await channel.send('❌ Seul le patron peut valider le paiement.');
-                setTimeout(async () => {
-                    const m = await channel.messages.fetch(msg.id).catch(() => null);
-                    if (m) await m.delete().catch(() => {});
-                }, 2 * 60 * 1000); // 2 minutes
+                const msg = await channel.send('❌ Seul le patron peut valider.');
+                setTimeout(() => msg.delete().catch(() => {}), 2 * 60 * 1000);
                 return;
             }
 
             const embed = EmbedBuilder.from(interaction.message.embeds[0])
                 .setColor('Green')
-                .setFooter({ text: '✅ Paiement validé par le patron' })
+                .setFooter({ text: '✅ Paiement validé' })
                 .setTimestamp();
 
             await interaction.update({ embeds: [embed], components: [] });
 
-            // Supprimer le message après 10 minutes
             setTimeout(async () => {
-                const msg = await channel.messages.fetch(interaction.message.id).catch(() => null);
-                if (msg) await msg.delete().catch(() => {});
+                const m = await channel.messages.fetch(interaction.message.id).catch(() => null);
+                if (m) await m.delete().catch(() => {});
             }, 10 * 60 * 1000);
         }
     }
 });
 
-// ----------------- Bot Ready -----------------
+// ================== READY ==================
 client.once(Events.ClientReady, () => {
     console.log(`🤖 Connecté en tant que ${client.user.tag}`);
 });
 
-client.login(process.env.TOKEN);
+console.log("🔄 Connexion au bot Discord...");
+client.login(process.env.TOKEN)
+    .then(() => console.log("✅ Login Discord réussi"))
+    .catch(err => console.error("❌ Login Discord échoué:", err));
 
-// ----------------- Express + ping Render -----------------
-const PORT = process.env.PORT || 3000;
+// ================== EXPRESS ==================
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-app.get('/', (req, res) => res.status(200).send('🤖 Bot en ligne'));
-
-app.listen(PORT, () => console.log(`🌐 Serveur web actif sur le port ${PORT}`));
+app.get('/', (_, res) => res.send('🤖 Bot en ligne'));
+app.listen(PORT, () => console.log(`🌐 Serveur actif sur ${PORT}`));
 
 setInterval(() => {
     axios.get(`http://localhost:${PORT}`).catch(() => {});
