@@ -231,6 +231,8 @@ client.on(Events.InteractionCreate, async interaction => {
 
 // ================== READY ==================
 let botReady = false; // ✅ déclaration correcte
+client.on('error', console.error);
+client.on('warn', console.warn);
 
 client.once(Events.ClientReady, () => {
     console.log(`🤖 Connecté en tant que ${client.user.tag}`);
