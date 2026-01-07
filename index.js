@@ -83,40 +83,47 @@ client.on('interactionCreate', async interaction => {
   }
 
   // ----- /settaux -----
-  if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
-    if (!interaction.member.permissions.has("Administrator")) {
-      return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
-    }
-
-    const grade = interaction.options.getString('grade');
-    const taux = interaction.options.getNumber('taux');
-
-    try {
-      await axios.post(GOOGLE_WEBHOOK, { type: "update_taux", grade, taux } { headers: { "Content-Type": "application/json" } });
-      return interaction.reply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €`, ephemeral: true });
-    } catch (err) {
-      console.error(err);
-      return interaction.reply({ content: "❌ Impossible de mettre à jour le taux", ephemeral: true });
-    }
+if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
+  if (!interaction.member.permissions.has("Administrator")) {
+    return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
   }
 
-  // ----- /addgrade -----
-  if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') {
-    if (!interaction.member.permissions.has("Administrator")) {
-      return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
-    }
+  const grade = interaction.options.getString('grade');
+  const taux = interaction.options.getNumber('taux');
 
-    const grade = interaction.options.getString('grade');
-    const taux = interaction.options.getNumber('taux');
-
-    try {
-      await axios.post(GOOGLE_WEBHOOK, { type: "update_taux", grade, taux } { headers: { "Content-Type": "application/json" } });
-      return interaction.reply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €`, ephemeral: true });
-    } catch (err) {
-      console.error(err);
-      return interaction.reply({ content: "❌ Impossible d'ajouter le grade", ephemeral: true });
-    }
+  try {
+    await axios.post(GOOGLE_WEBHOOK, 
+      { type: "update_taux", grade, taux }, 
+      { headers: { "Content-Type": "application/json" } }
+    );
+    return interaction.reply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €`, ephemeral: true });
+  } catch (err) {
+    console.error(err);
+    return interaction.reply({ content: "❌ Impossible de mettre à jour le taux", ephemeral: true });
   }
+}
+
+// ----- /addgrade -----
+if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') {
+  if (!interaction.member.permissions.has("Administrator")) {
+    return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
+  }
+
+  const grade = interaction.options.getString('grade');
+  const taux = interaction.options.getNumber('taux');
+
+  try {
+    await axios.post(GOOGLE_WEBHOOK, 
+      { type: "update_taux", grade, taux }, 
+      { headers: { "Content-Type": "application/json" } }
+    );
+    return interaction.reply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €`, ephemeral: true });
+  } catch (err) {
+    console.error(err);
+    return interaction.reply({ content: "❌ Impossible d'ajouter le grade", ephemeral: true });
+  }
+}
+
 
   // ----- Boutons Start / Pause / Resume / End -----
   if (interaction.isButton() && ['start_service','pause_service','resume_service','end_service'].includes(interaction.customId)) {
