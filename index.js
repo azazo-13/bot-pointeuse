@@ -1,3 +1,5 @@
+console.log("TOKEN présent :", process.env.TOKEN ? "OUI" : "NON");
+console.log("CLIENT_ID présent :", process.env.CLIENT_ID ? "OUI" : "NON");
 const fs = require('fs');
 const axios = require('axios');
 const express = require('express');
