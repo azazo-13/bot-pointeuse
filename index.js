@@ -1,17 +1,6 @@
 const fs = require('fs');
 const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, Events, SlashCommandBuilder, REST, Routes } = require('discord.js');
 require('dotenv').config(); // Pour token et client ID
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get('/', (req, res) => {
-    res.send('Bot Discord actif !');
-});
-
-app.listen(PORT, () => {
-    console.log(`Serveur web actif sur le port ${PORT}`);
-});
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
@@ -125,8 +114,17 @@ client.once(Events.ClientReady, () => {
 client.login(process.env.TOKEN);
 
 // ----- Express + Ping Render -----
+const axios = require('axios'); // Ajouter au début du fichier avec require('dotenv').config()
+const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 10000;
-app.get('/', (req,res) => res.status(200).send('🤖 Bot en ligne'));
-app.listen(PORT, () => console.log(`🌐 Serveur actif sur ${PORT}`));
-setInterval(() => axios.get(`http://localhost:${PORT}`).catch(()=>{}), 5*60*1000);
+const PORT = process.env.PORT || 3000;
+
+// Ping pour Render ou autres services
+app.get('/', (req, res) => res.status(200).send('🤖 Bot en ligne'));
+
+app.listen(PORT, () => console.log(`🌐 Serveur web actif sur ${PORT}`));
+
+// Ping automatique pour éviter que Render mette le bot en veille
+setInterval(() => {
+    axios.get(`http://localhost:${PORT}`).catch(() => {});
+}, 5 * 60 * 1000); // toutes les 5 minutes
