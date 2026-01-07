@@ -12,16 +12,16 @@ const DATA_PATH = path.join(__dirname, 'data.json');
 
 // ----- Utilitaires JSON -----
 function loadData() {
-  let raw;
+  if (!fs.existsSync(DATA_PATH)) {
+    fs.writeFileSync(DATA_PATH, JSON.stringify({ grades: { everyone: 6000 }, services: {} }, null, 2));
+  }
   try {
-    raw = fs.readFileSync(DATA_PATH, 'utf-8');
-    if (!raw) throw new Error('Fichier vide');
-    return JSON.parse(raw);
+    return JSON.parse(fs.readFileSync(DATA_PATH, 'utf-8'));
   } catch (err) {
-    console.warn('⚠️ data.json vide ou corrompu, création d’un nouveau fichier…');
-    const initialData = { grades: { everyone: 6000 }, services: {} };
-    fs.writeFileSync(DATA_PATH, JSON.stringify(initialData, null, 2));
-    return initialData;
+    console.error('❌ JSON invalide, réinitialisation');
+    const defaultData = { grades: { everyone: 6000 }, services: {} };
+    fs.writeFileSync(DATA_PATH, JSON.stringify(defaultData, null, 2));
+    return defaultData;
   }
 }
 
@@ -31,7 +31,7 @@ function saveData(data) {
 
 // ----- Initialisation bot -----
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] // nécessaire pour lire les rôles
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
 const data = loadData();
@@ -68,22 +68,23 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   }
 })();
 
-// ----- Gestion des interactions -----
+// ----- InteractionCreate -----
 client.on('interactionCreate', async interaction => {
 
   // ----- Commandes Slash -----
   if (interaction.isChatInputCommand()) {
+
+    // Menu pointeuse
     if (interaction.commandName === 'pointeuse') {
       const embed = new EmbedBuilder()
-        .setTitle('🕒 Pointeuse de service')
-        .setDescription('Gérez votre service en cliquant sur les boutons ci-dessous.\n\n**Grades disponibles** : ' + Object.keys(data.grades).join(', '))
+        .setTitle('🕒 Pointeuse générale')
+        .setDescription('Cliquez sur les boutons ci-dessous pour gérer votre service.\n\nGrades disponibles : ' + Object.keys(data.grades).join(', '))
         .setColor(0x3498db)
-        .setFooter({ text: 'Pointeuse automatique' })
-        .setTimestamp();
+        .setFooter({ text: 'Pointeuse automatique' });
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Commencer le service').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('end_service').setLabel('⏹️ Terminer le service').setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Prendre son service').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('end_service').setLabel('⏹️ Fin de service').setStyle(ButtonStyle.Danger)
       );
 
       return interaction.reply({ embeds: [embed], components: [row] });
@@ -114,10 +115,14 @@ client.on('interactionCreate', async interaction => {
   // ----- Boutons -----
   if (!interaction.isButton()) return;
   const userId = interaction.user.id;
-  const member = await interaction.guild.members.fetch(userId);
+
+  // Récupération du membre Discord
+  const member = await interaction.guild.members.fetch(userId).catch(() => null);
+  if (!member) return interaction.reply({ content: '❌ Impossible de récupérer vos informations Discord.', ephemeral: true });
+
   const now = new Date();
 
-  // Déterminer le grade en fonction du rôle le plus haut
+  // Détermination du grade via rôle
   let grade = 'everyone';
   if (member.roles.cache.size > 0) {
     const sortedRoles = member.roles.cache.sort((a,b) => b.position - a.position);
@@ -129,20 +134,20 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // Start service
+  // ----- START SERVICE -----
   if (interaction.customId === 'start_service') {
     if (data.services[userId] && !data.services[userId].end) {
-      return interaction.reply({ content: '❌ Service déjà en cours', ephemeral: true });
+      return interaction.reply({ content: '❌ Service déjà en cours !', ephemeral: true });
     }
     data.services[userId] = { start: now.toISOString(), grade };
     saveData(data);
     return interaction.reply({ content: `🟢 Service commencé avec grade "${grade}"`, ephemeral: true });
   }
 
-  // End service
+  // ----- END SERVICE -----
   if (interaction.customId === 'end_service') {
     const service = data.services[userId];
-    if (!service || service.end) return interaction.reply({ content: '❌ Aucun service en cours', ephemeral: true });
+    if (!service || service.end) return interaction.reply({ content: '❌ Aucun service en cours !', ephemeral: true });
 
     service.end = now.toISOString();
     service.hours = ((new Date(service.end) - new Date(service.start)) / 3600000).toFixed(2);
@@ -162,15 +167,16 @@ client.on('interactionCreate', async interaction => {
 
     return interaction.reply({ embeds: [embed] });
   }
+
 });
 
-// ----- Connexion -----
+// ----- Connexion Bot -----
 client.once('ready', () => console.log(`Connecté en tant que ${client.user.tag}`));
 client.login(process.env.TOKEN);
 
-// ----- EXPRESS / PING -----
+// ----- EXPRESS / PING Render -----
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (req,res) => res.status(200).send('🤖 Bot en ligne'));
-app.listen(PORT, () => console.log(`🌐 Serveur actif sur ${PORT}`));
+app.listen(PORT, () => console.log(`🌐 Serveur actif sur le port ${PORT}`));
 setInterval(() => axios.get(`http://localhost:${PORT}`).catch(()=>{}), 5*60*1000);
