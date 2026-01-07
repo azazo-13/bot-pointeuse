@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const axios = require('axios');
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 
 const {
     Client,
@@ -27,57 +27,46 @@ const {
 const PORT = process.env.PORT || 10000;
 const DB_FILE = './database.db';
 const BACKUP_DIR = './backups';
-const BACKUP_INTERVAL = 6 * 60 * 60 * 1000; // 6h
+const BACKUP_INTERVAL = 6 * 60 * 60 * 1000;
 const MAX_BACKUPS = 10;
 
 // ================== INIT FICHIERS ==================
+if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR);
 
-// Dossier backups
-if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR);
-    console.log('📁 Dossier backups créé');
-}
+// ================== SQLITE ==================
+const db = new Database(DB_FILE);
 
-// Base SQLite
-const db = new sqlite3.Database(DB_FILE, err => {
-    if (!err) console.log('🗄️ Base SQLite prête');
-});
+// Tables
+db.prepare(`
+    CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        start INTEGER,
+        end INTEGER,
+        taux REAL
+    )
+`).run();
 
-// ================== INIT DB ==================
-db.serialize(() => {
-    db.run(`
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            start INTEGER,
-            end INTEGER,
-            taux REAL
-        )
-    `);
+db.prepare(`
+    CREATE TABLE IF NOT EXISTS roles (
+        role TEXT PRIMARY KEY,
+        taux REAL
+    )
+`).run();
 
-    db.run(`
-        CREATE TABLE IF NOT EXISTS roles (
-            role TEXT PRIMARY KEY,
-            taux REAL
-        )
-    `);
-
-    db.run(`
-        INSERT OR IGNORE INTO roles (role, taux)
-        VALUES ('everyone', 10)
-    `);
-});
+db.prepare(`
+    INSERT OR IGNORE INTO roles (role, taux)
+    VALUES ('everyone', 10)
+`).run();
 
 // ================== BACKUP AUTO ==================
 function backupDatabase() {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const file = path.join(BACKUP_DIR, `backup-${timestamp}.db`);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = path.join(BACKUP_DIR, `backup-${stamp}.db`);
 
-    fs.copyFile(DB_FILE, file, err => {
-        if (err) return console.error('❌ Backup échoué', err);
-        cleanupBackups();
-        console.log('💾 Backup créé');
-    });
+    fs.copyFileSync(DB_FILE, file);
+    cleanupBackups();
+    console.log('💾 Backup DB OK');
 }
 
 function cleanupBackups() {
@@ -89,12 +78,11 @@ function cleanupBackups() {
         }))
         .sort((a, b) => b.time - a.time);
 
-    files.slice(MAX_BACKUPS).forEach(f => {
-        fs.unlinkSync(path.join(BACKUP_DIR, f.name));
-    });
+    files.slice(MAX_BACKUPS).forEach(f =>
+        fs.unlinkSync(path.join(BACKUP_DIR, f.name))
+    );
 }
 
-// Backup au démarrage + intervalle
 backupDatabase();
 setInterval(backupDatabase, BACKUP_INTERVAL);
 
@@ -106,12 +94,9 @@ const formatDuration = ms => {
     return `${h}h ${m}m ${s}s`;
 };
 
-// ================== CLIENT DISCORD ==================
+// ================== DISCORD CLIENT ==================
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers
-    ]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
 // ================== SLASH COMMANDS ==================
@@ -137,13 +122,13 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
         ),
         { body: commands }
     );
-    console.log('✅ Slash commands déployées');
+    console.log('✅ Slash commands OK');
 })();
 
 // ================== INTERACTIONS ==================
-client.on(Events.InteractionCreate, async interaction => {
+client.on(Events.InteractionCreate, interaction => {
 
-    // ---------- SLASH ----------
+    // SLASH
     if (interaction.isChatInputCommand()) {
         if (interaction.commandName === 'create_pointeuse') {
             const row = new ActionRowBuilder().addComponents(
@@ -153,82 +138,78 @@ client.on(Events.InteractionCreate, async interaction => {
 
             const embed = new EmbedBuilder()
                 .setTitle('🕒 Pointeuse')
-                .setDescription('Démarrer ou terminer le service')
                 .setColor('Blue');
 
             return interaction.reply({ embeds: [embed], components: [row] });
         }
 
         if (interaction.commandName === 'add_role') {
-            db.run(
-                `INSERT OR REPLACE INTO roles (role, taux) VALUES (?, ?)`,
-                [interaction.options.getString('role'), interaction.options.getNumber('taux')]
+            db.prepare(`
+                INSERT OR REPLACE INTO roles (role, taux)
+                VALUES (?, ?)
+            `).run(
+                interaction.options.getString('role'),
+                interaction.options.getNumber('taux')
             );
+
             return interaction.reply('✅ Rôle ajouté');
         }
     }
 
-    // ---------- BOUTONS ----------
+    // BOUTONS
     if (interaction.isButton()) {
         const uid = interaction.user.id;
         const name = interaction.member.displayName;
 
-        // START
         if (interaction.customId === 'start') {
-            db.get(
-                `SELECT * FROM sessions WHERE user_id = ? AND end IS NULL`,
-                [uid],
-                (_, row) => {
-                    if (row) {
-                        return interaction.reply({
-                            content: '⚠️ Tu es déjà en service.',
-                            ephemeral: true
-                        });
-                    }
+            const open = db.prepare(`
+                SELECT 1 FROM sessions
+                WHERE user_id = ? AND end IS NULL
+            `).get(uid);
 
-                    db.get(
-                        `SELECT MAX(taux) as taux FROM roles`,
-                        [],
-                        (_, r) => {
-                            const taux = r?.taux || 10;
+            if (open) {
+                return interaction.reply({ content: '⚠️ Déjà en service.', ephemeral: true });
+            }
 
-                            db.run(
-                                `INSERT INTO sessions (user_id, start, taux)
-                                 VALUES (?, ?, ?)`,
-                                [uid, Date.now(), taux]
-                            );
+            const taux = db.prepare(`
+                SELECT MAX(taux) AS taux FROM roles
+            `).get().taux || 10;
 
-                            const embed = new EmbedBuilder()
-                                .setTitle('🟢 Début de service')
-                                .setDescription(`👤 ${name}\n💶 ${taux}€/h`)
-                                .setColor('Green')
-                                .setTimestamp();
+            db.prepare(`
+                INSERT INTO sessions (user_id, start, taux)
+                VALUES (?, ?, ?)
+            `).run(uid, Date.now(), taux);
 
-                            interaction.channel.send({ embeds: [embed] });
-                        }
-                    );
-                }
-            );
+            return interaction.channel.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setTitle('🟢 Début de service')
+                        .setDescription(`👤 ${name}\n💶 ${taux}€/h`)
+                        .setColor('Green')
+                ]
+            });
         }
 
-        // END
         if (interaction.customId === 'end') {
-            db.get(
-                `SELECT * FROM sessions WHERE user_id = ? AND end IS NULL`,
-                [uid],
-                (_, session) => {
-                    if (!session) return;
+            const session = db.prepare(`
+                SELECT * FROM sessions
+                WHERE user_id = ? AND end IS NULL
+            `).get(uid);
 
-                    const end = Date.now();
-                    const duration = end - session.start;
-                    const pay = (duration / 3600000) * session.taux;
+            if (!session) return;
 
-                    db.run(
-                        `UPDATE sessions SET end = ? WHERE id = ?`,
-                        [end, session.id]
-                    );
+            const end = Date.now();
+            const duration = end - session.start;
+            const pay = (duration / 3600000) * session.taux;
 
-                    const embed = new EmbedBuilder()
+            db.prepare(`
+                UPDATE sessions SET end = ?
+                WHERE id = ?
+            `).run(end, session.id);
+
+            return interaction.channel.send({
+                embeds: [
+                    new EmbedBuilder()
                         .setTitle('🔴 Fin de service')
                         .setColor('Red')
                         .addFields(
@@ -236,11 +217,8 @@ client.on(Events.InteractionCreate, async interaction => {
                             { name: 'Durée', value: formatDuration(duration), inline: true },
                             { name: 'Paye', value: `${pay.toFixed(2)}€`, inline: true }
                         )
-                        .setTimestamp();
-
-                    interaction.channel.send({ embeds: [embed] });
-                }
-            );
+                ]
+            });
         }
     }
 });
