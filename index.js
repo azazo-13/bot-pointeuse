@@ -20,23 +20,14 @@ const {
 } = require('discord.js');
 require('dotenv').config();
 
-// ================== CLIENT ==================
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
-    ]
-});
-
-// ================== DATA ==================
+// ================== VARIABLES ==================
 const DATA_FILE = './data.json';
 let data = { roles: { everyone: 10 }, users: {} };
 
+// ================== CHARGEMENT DATA ==================
 try {
     if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4));
-    const raw = fs.readFileSync(DATA_FILE);
+    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
     data = JSON.parse(raw);
     if (!data.roles) data.roles = { everyone: 10 };
     if (!data.users) data.users = {};
@@ -48,6 +39,7 @@ function saveData() {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4));
 }
 
+// ================== UTILS ==================
 function formatDuration(ms) {
     const h = Math.floor(ms / 3600000);
     const m = Math.floor((ms % 3600000) / 60000);
@@ -62,6 +54,16 @@ function getUserTaux(member) {
     return Math.max(...rolesValides.map(r => data.roles[r]));
 }
 
+// ================== CLIENT DISCORD ==================
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
+    ]
+});
+
 // ================== COMMANDES SLASH ==================
 const commands = [
     new SlashCommandBuilder().setName('create_pointeuse').setDescription('Créer la pointeuse'),
@@ -69,12 +71,12 @@ const commands = [
         .setName('add_role')
         .setDescription('Ajouter un rôle avec un taux horaire')
         .addStringOption(o => o.setName('role').setDescription('Nom du rôle').setRequired(true))
-        .addNumberOption(o => o.setName('taux').setDescription('Taux horaire €').setRequired(true)),
-    new SlashCommandBuilder().setName('summary').setDescription('Résumé des heures et payes')
+        .addNumberOption(o => o.setName('taux').setDescription('Taux horaire €').setRequired(true))
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
+// Déploiement des commandes
 (async () => {
     try {
         console.log('🔄 Déploiement des commandes slash...');
@@ -102,7 +104,11 @@ client.on(Events.InteractionCreate, async interaction => {
                         new ButtonBuilder().setCustomId('start_service').setLabel('🟢 Début de service').setStyle(ButtonStyle.Success),
                         new ButtonBuilder().setCustomId('end_service').setLabel('🔴 Fin de service').setStyle(ButtonStyle.Danger)
                     );
-                    const embed = new EmbedBuilder().setTitle('🕒 Pointeuse').setDescription('🟢 Commencer / 🔴 Terminer le service').setColor('Blue').setTimestamp();
+                    const embed = new EmbedBuilder()
+                        .setTitle('🕒 Pointeuse')
+                        .setDescription('🟢 Commencer / 🔴 Terminer le service')
+                        .setColor('Blue')
+                        .setTimestamp();
                     await interaction.editReply({ embeds: [embed], components: [row] });
                     break;
 
@@ -112,25 +118,6 @@ client.on(Events.InteractionCreate, async interaction => {
                     data.roles[roleName] = taux;
                     saveData();
                     await interaction.reply(`✅ Rôle **${roleName}** ajouté (${taux}€/h)`);
-                    break;
-
-                case 'summary':
-                    const summaryEmbed = new EmbedBuilder().setTitle('📊 Résumé des heures et payes').setColor('Green');
-                    for (const userId in data.users) {
-                        let totalMs = 0, totalPay = 0;
-                        data.users[userId].forEach(s => {
-                            if (s.end) {
-                                totalMs += s.end - s.start;
-                                totalPay += ((s.end - s.start) / 3600000) * s.taux;
-                            }
-                        });
-                        const member = await interaction.guild.members.fetch(userId).catch(() => null);
-                        summaryEmbed.addFields({
-                            name: member ? member.displayName : 'Utilisateur inconnu',
-                            value: `⏱ ${(totalMs / 3600000).toFixed(2)}h\n💰 ${totalPay.toFixed(2)}€`
-                        });
-                    }
-                    await interaction.reply({ embeds: [summaryEmbed] });
                     break;
             }
         }
@@ -146,7 +133,11 @@ client.on(Events.InteractionCreate, async interaction => {
                 data.users[interaction.user.id] = sessions;
                 saveData();
 
-                const embedStart = new EmbedBuilder().setTitle('🟢 Début de service').setDescription(`👤 ${displayName}\n💶 ${taux}€/h`).setColor('Blue').setTimestamp();
+                const embedStart = new EmbedBuilder()
+                    .setTitle('🟢 Début de service')
+                    .setDescription(`👤 ${displayName}\n💶 ${taux}€/h`)
+                    .setColor('Blue')
+                    .setTimestamp();
                 const msg = await channel.send({ embeds: [embedStart] });
                 session.startMessageId = msg.id;
                 saveData();
@@ -193,7 +184,10 @@ client.on(Events.InteractionCreate, async interaction => {
                     return;
                 }
 
-                const embedValidated = EmbedBuilder.from(interaction.message.embeds[0]).setColor('Green').setFooter({ text: '✅ Paiement validé' }).setTimestamp();
+                const embedValidated = EmbedBuilder.from(interaction.message.embeds[0])
+                    .setColor('Green')
+                    .setFooter({ text: '✅ Paiement validé' })
+                    .setTimestamp();
                 await interaction.update({ embeds: [embedValidated], components: [] });
 
                 setTimeout(async () => {
@@ -210,11 +204,8 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 // ================== READY ==================
-let botReady = false;
 client.once(Events.ClientReady, () => {
     console.log(`🤖 Connecté en tant que ${client.user.tag}`);
-    botReady = true;
-
     client.on('error', console.error);
     client.on('warn', console.warn);
 });
@@ -232,4 +223,6 @@ app.get('/', (_, res) => res.send('🤖 Bot en ligne'));
 app.listen(PORT, () => console.log(`🌐 Serveur actif sur ${PORT}`));
 
 // Ping automatique Render
-setInterval(() => { axios.get(`http://localhost:${PORT}`).catch(() => {}); }, 5 * 60 * 1000);
+setInterval(() => {
+    axios.get(`http://localhost:${PORT}`).catch(() => {});
+}, 5 * 60 * 1000);
