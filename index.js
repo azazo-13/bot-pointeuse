@@ -1,12 +1,14 @@
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { 
+  Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, 
+  EmbedBuilder, REST, Routes, SlashCommandBuilder 
+} = require('discord.js');
 const axios = require('axios');
 const express = require('express');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
 
-// 🔗 Webhooks Apps Script
+// 🔗 Webhook unique Apps Script
 const GOOGLE_WEBHOOK = "https://script.google.com/macros/s/AKfycbxpYE6z-UUIsl6GPU-U4wer4BkAAbInL0SHgmnKprihOaB7j63rTMZ8bfdAkW24KN3nCw/exec";
-const GOOGLE_WEBHOOK_UPDATE_TAUX = "https://script.google.com/macros/s/AKfycbwN7gdMZzdCgtuP3HUEPTvUIdSNr_LyCUMTinU2vzRxeydtq4TM-HKVPckvAOTFsC5Epg/exec";
 
 // ----- Commandes slash -----
 const commands = [
@@ -17,43 +19,36 @@ const commands = [
   new SlashCommandBuilder()
     .setName('settaux')
     .setDescription('Modifier le taux d’un grade existant')
-    .addStringOption(option => option.setName('grade').setDescription('Grade à modifier').setRequired(true))
-    .addNumberOption(option => option.setName('taux').setDescription('Nouveau taux en €').setRequired(true)),
+    .addStringOption(opt => opt.setName('grade').setDescription('Grade à modifier').setRequired(true))
+    .addNumberOption(opt => opt.setName('taux').setDescription('Nouveau taux en €').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('addgrade')
     .setDescription('Ajouter un nouveau grade avec son taux')
-    .addStringOption(option => option.setName('grade').setDescription('Nom du grade').setRequired(true))
-    .addNumberOption(option => option.setName('taux').setDescription('Taux horaire du grade en €').setRequired(true))
+    .addStringOption(opt => opt.setName('grade').setDescription('Nom du grade').setRequired(true))
+    .addNumberOption(opt => opt.setName('taux').setDescription('Taux horaire du grade en €').setRequired(true))
 ].map(cmd => cmd.toJSON());
 
 // ----- Enregistrement des commandes globales -----
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
 (async () => {
   try {
     console.log('🔄 Mise à jour des commandes globales...');
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-    await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, "1458155943844909161"),
-      { body: commands } );
-    
-    console.log('✅ Commandes globales mises à jour dans Discord : /createp, /settaux, /addgrade');
+    console.log('✅ Commandes globales mises à jour : /createp, /settaux, /addgrade');
   } catch (err) {
-    console.error('❌ Erreur lors de l’enregistrement global :', err);
+    console.error('❌ Erreur en enregistrant les commandes :', err);
   }
 })();
 
-
 // ----- Stockage messages et états -----
 const userMessages = new Map(); // { userId: message }
-const userState = new Map(); // { userId: { status: "active"|"pause"|"cooldown", cooldownEnd: Date } }
+const userState = new Map();    // { userId: { status: "active"|"pause"|"cooldown", cooldownEnd: Date } }
 
-// ----- Helpers -----
+// ----- Vérification des actions autorisées -----
 function isActionAllowed(userId, action) {
   const state = userState.get(userId);
   const now = new Date();
-
   if (!state) return true;
   if (state.status === 'cooldown') {
     if (now < state.cooldownEnd) return false;
@@ -73,7 +68,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand() && interaction.commandName === 'createp') {
     const embed = new EmbedBuilder()
       .setTitle('🕒 Pointeuse générale')
-      .setDescription('Cliquez sur les boutons pour gérer votre service.\nGrades : employe, chef, patron (info seulement)')
+      .setDescription('Cliquez sur les boutons pour gérer votre service.\nGrades : employe, chef, patron')
       .setColor(0x3498db)
       .setFooter({ text: 'Pointeuse automatique' });
 
@@ -89,29 +84,37 @@ client.on('interactionCreate', async interaction => {
 
   // ----- /settaux -----
   if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
+    if (!interaction.member.permissions.has("Administrator")) {
+      return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
+    }
+
     const grade = interaction.options.getString('grade');
     const taux = interaction.options.getNumber('taux');
 
     try {
-      await axios.post(GOOGLE_WEBHOOK_UPDATE_TAUX, { grade, taux });
-      return interaction.reply({ content: `✅ Le taux du grade "${grade}" a été mis à jour à ${taux} €`, ephemeral: true });
+      await axios.post(GOOGLE_WEBHOOK, { type: "update_taux", grade, taux });
+      return interaction.reply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €`, ephemeral: true });
     } catch (err) {
       console.error(err);
-      return interaction.reply({ content: `❌ Impossible de mettre à jour le taux.`, ephemeral: true });
+      return interaction.reply({ content: "❌ Impossible de mettre à jour le taux", ephemeral: true });
     }
   }
 
   // ----- /addgrade -----
   if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') {
+    if (!interaction.member.permissions.has("Administrator")) {
+      return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
+    }
+
     const grade = interaction.options.getString('grade');
     const taux = interaction.options.getNumber('taux');
 
     try {
-      await axios.post(GOOGLE_WEBHOOK_UPDATE_TAUX, { grade, taux });
-      return interaction.reply({ content: `✅ Le grade "${grade}" a été ajouté avec un taux de ${taux} €`, ephemeral: true });
+      await axios.post(GOOGLE_WEBHOOK, { type: "update_taux", grade, taux });
+      return interaction.reply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €`, ephemeral: true });
     } catch (err) {
       console.error(err);
-      return interaction.reply({ content: `❌ Impossible d'ajouter le grade.`, ephemeral: true });
+      return interaction.reply({ content: "❌ Impossible d'ajouter le grade", ephemeral: true });
     }
   }
 
@@ -124,13 +127,13 @@ client.on('interactionCreate', async interaction => {
     }
 
     try {
-      const grade = "employe"; // à remplacer par le rôle Discord si tu veux
+      const grade = "employe"; // par défaut
       const res = await axios.post(GOOGLE_WEBHOOK, {
+        type: "pointeuse",
         action: interaction.customId.replace('_service',''),
         userId,
         username: user.username,
-        grade,
-        time: new Date().toISOString()
+        grade
       });
 
       const data = res.data;
@@ -147,11 +150,11 @@ client.on('interactionCreate', async interaction => {
           break;
         case 'pause_service':
           userState.set(userId, { status: 'pause' });
-          messageText = `⏸️ Service en pause ${displayName}, profitez-en pour souffler.`;
+          messageText = `⏸️ Service en pause ${displayName}.`;
           break;
         case 'resume_service':
           userState.set(userId, { status: 'active' });
-          messageText = `▶️ Reprise du service ${displayName}, courage !`;
+          messageText = `▶️ Reprise du service ${displayName}.`;
           break;
         case 'end_service':
           userState.set(userId, { status: 'cooldown', cooldownEnd: new Date(Date.now() + 2*60*1000) });
@@ -159,13 +162,13 @@ client.on('interactionCreate', async interaction => {
 
           const embed = new EmbedBuilder()
             .setTitle('🧾 Fin de service')
-            .setDescription(`Voici le résumé du service de <@${userId}>`)
+            .setDescription(`Résumé du service de <@${userId}>`)
             .setColor(0x1abc9c)
             .addFields(
-                { name: '👤 Employé', value: `<@${userId}>`, inline: true },
-                { name: '📅 Date', value: data.date, inline: true },
-                { name: '⏱ Durée', value: data.hours, inline: true },
-                { name: '💰 Salaire', value: `${data.salary} €`, inline: true }
+              { name: '👤 Employé', value: `<@${userId}>`, inline: true },
+              { name: '📅 Date', value: data.date, inline: true },
+              { name: '⏱ Durée', value: data.hours, inline: true },
+              { name: '💰 Salaire', value: `${data.salary} €`, inline: true }
             )
             .setFooter({ text: 'Pointeuse automatique • Service terminé' })
             .setTimestamp();
@@ -201,7 +204,7 @@ client.on('interactionCreate', async interaction => {
 // ----- Connexion du bot -----
 client.login(process.env.TOKEN);
 
-// ----- Serveur Express (Render) -----
+// ----- Serveur Express pour Render -----
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (req,res) => res.status(200).send('🤖 Bot Discord en ligne'));
