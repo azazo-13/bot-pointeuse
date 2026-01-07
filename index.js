@@ -5,7 +5,10 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 require('dotenv').config();
 
 // ----------------- Config -----------------
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+const client = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+});
+
 const DATA_FILE = './data.json';
 let data = JSON.parse(fs.readFileSync(DATA_FILE));
 
@@ -14,12 +17,14 @@ function saveData() {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4));
 }
 
+// Récupérer le taux horaire basé uniquement sur les rôles enregistrés
 function getUserTaux(member) {
     const userRoles = member.roles.cache.map(r => r.name);
     const applicableRoles = userRoles.filter(r => data.roles[r]);
     return applicableRoles.length > 0 ? Math.max(...applicableRoles.map(r => data.roles[r])) : data.roles['everyone'];
 }
 
+// Formater la durée en h m s
 function formatDuration(ms) {
     const hours = Math.floor(ms / 3600000);
     const minutes = Math.floor((ms % 3600000) / 60000);
@@ -50,7 +55,7 @@ const commands = [
         .setDescription('Afficher le résumé des heures et payes de tous les utilisateurs')
 ].map(cmd => cmd.toJSON());
 
-// Déploiement instantané sur serveur test
+// Déploiement des commandes sur serveur test
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
     try {
@@ -68,7 +73,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 // ----------------- Gestion des interactions -----------------
 client.on(Events.InteractionCreate, async interaction => {
 
-    // Commandes slash
+    // ---------------- Commandes slash ----------------
     if (interaction.isChatInputCommand()) {
         const displayName = interaction.member.displayName;
 
@@ -132,14 +137,12 @@ client.on(Events.InteractionCreate, async interaction => {
         }
     }
 
-    // Gestion des boutons
+    // ---------------- Gestion des boutons ----------------
     if (interaction.isButton()) {
         const userId = interaction.user.id;
         const displayName = interaction.member.displayName;
         const taux = getUserTaux(interaction.member);
-        const channel = interaction.guild.channels.cache.find(c => c.name === 'general');
-
-        if (!channel) return interaction.reply({ content: '⚠️ Canal général introuvable.', ephemeral: true });
+        const channel = interaction.channel; // canal actuel
 
         // --- Début de service ---
         if (interaction.customId === 'start_service') {
@@ -148,7 +151,6 @@ client.on(Events.InteractionCreate, async interaction => {
             data.users[userId].push(session);
             saveData();
 
-            // Envoyer message début de service
             const message = await channel.send(`🟢 **${displayName}** a commencé son service. Taux horaire : ${taux}€`);
             session.startMessageId = message.id;
             saveData();
@@ -230,7 +232,6 @@ app.get('/', (req, res) => res.status(200).send('🤖 Bot en ligne'));
 
 app.listen(PORT, () => console.log(`🌐 Serveur web actif sur le port ${PORT}`));
 
-// Ping automatique pour éviter la mise en veille
 setInterval(() => {
     axios.get(`http://localhost:${PORT}`).catch(() => {});
 }, 5 * 60 * 1000);
