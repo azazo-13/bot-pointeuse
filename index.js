@@ -233,6 +233,7 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 // ================== READY ==================
+let botReady = false; // ✅ Déclaration de la variable
 client.once(Events.ClientReady, () => {
     console.log(`🤖 Connecté en tant que ${client.user.tag}`);
 });
