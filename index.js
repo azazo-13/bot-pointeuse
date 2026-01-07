@@ -246,9 +246,9 @@ client.login(process.env.TOKEN)
 const app = express();
 const PORT = process.env.PORT || 10000;
 // ================== CHECK BOT ==================
-setInterval(async () => {
-    if (!client.isReady()) {
-        console.log("⚠️ Bot Discord pas prêt !");
+setInterval(() => {
+    if (!botReady) {
+        console.log("⚠️ Bot Discord pas encore prêt...");
     } else {
         console.log(`💓 Bot Discord en ligne (${new Date().toLocaleTimeString()})`);
     }
