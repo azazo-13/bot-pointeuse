@@ -1,12 +1,12 @@
-require('dotenv').config();
 const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const axios = require('axios');
 const express = require('express');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
 
-const GOOGLE_WEBHOOK = process.env.GOOGLE_WEBHOOK; // Pointeuse
-const GOOGLE_WEBHOOK_UPDATE_TAUX = process.env.GOOGLE_WEBHOOK_UPDATE_TAUX; // Update/Add grade
+// 🔗 Webhooks Apps Script
+const GOOGLE_WEBHOOK = "https://script.google.com/macros/s/AKfycbxpYE6z-UUIsl6GPU-U4wer4BkAAbInL0SHgmnKprihOaB7j63rTMZ8bfdAkW24KN3nCw/exec";
+const GOOGLE_WEBHOOK_UPDATE_TAUX = "https://script.google.com/macros/s/TON_UPDATE_TAUX_WEBAPP/exec";
 
 // ----- Commandes slash -----
 const commands = [
@@ -59,11 +59,11 @@ function isActionAllowed(userId, action) {
   return true;
 }
 
-// ----- Interaction boutons et commandes -----
+// ----- Gestion des interactions -----
 client.on('interactionCreate', async interaction => {
   const user = interaction.user;
 
-  // ----- Commande /createp -----
+  // ----- /createp -----
   if (interaction.isChatInputCommand() && interaction.commandName === 'createp') {
     const embed = new EmbedBuilder()
       .setTitle('🕒 Pointeuse générale')
@@ -81,7 +81,7 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ embeds: [embed], components: [row] });
   }
 
-  // ----- Commande /settaux -----
+  // ----- /settaux -----
   if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
     const grade = interaction.options.getString('grade');
     const taux = interaction.options.getNumber('taux');
@@ -95,7 +95,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // ----- Commande /addgrade -----
+  // ----- /addgrade -----
   if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') {
     const grade = interaction.options.getString('grade');
     const taux = interaction.options.getNumber('taux');
@@ -118,7 +118,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     try {
-      const grade = "employe"; // ou récupéré dynamiquement depuis le rôle Discord si besoin
+      const grade = "employe"; // à remplacer par le rôle Discord si tu veux
       const res = await axios.post(GOOGLE_WEBHOOK, {
         action: interaction.customId.replace('_service',''),
         userId,
@@ -172,7 +172,6 @@ client.on('interactionCreate', async interaction => {
           return interaction.reply({ embeds: [embed] });
       }
 
-      // Pour Start / Pause / Resume → message public ou update du message existant
       if (messageText) {
         if (userMessages.has(userId)) {
           const msg = userMessages.get(userId);
@@ -191,10 +190,6 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // ----- Bouton Payé -----
-  if (interaction.isButton() && interaction.customId.startsWith('paid_')) {
-    try { await interaction.message.delete(); } catch {}
-  }
 });
 
 // ----- Connexion du bot -----
