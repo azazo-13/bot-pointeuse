@@ -106,10 +106,18 @@ const commands = [
         .setDescription('Créer la pointeuse'),
 
     new SlashCommandBuilder()
-        .setName('add_role')
-        .setDescription('Ajouter un rôle avec taux')
-        .addStringOption(o => o.setName('role').setRequired(true))
-        .addNumberOption(o => o.setName('taux').setRequired(true))
+    .setName('add_role')
+    .setDescription('Ajouter un rôle avec un taux horaire')
+    .addStringOption(o =>
+        o.setName('role')
+         .setDescription('Nom exact du rôle Discord')
+         .setRequired(true)
+    )
+    .addNumberOption(o =>
+        o.setName('taux')
+         .setDescription('Taux horaire en euros')
+         .setRequired(true)
+    )
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
