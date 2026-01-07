@@ -278,7 +278,7 @@ setInterval(() => {
     } else {
         console.log(`💓 Bot Discord en ligne (${new Date().toLocaleTimeString()})`);
     }
-}, 30000);
+}, 120000);
 
 // ================== LOGIN DISCORD ==================
 console.log("🔄 Connexion au bot Discord...");
