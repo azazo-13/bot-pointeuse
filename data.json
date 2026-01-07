@@ -1,1 +1,10 @@
+{
+  "roles": {
+    "test1": 7000,
+    "test2": 8000,
+    "test3": 9000,
+    "Employé": 6000
+  },
+  "active_sessions": {}
+}
 
