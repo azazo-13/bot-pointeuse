@@ -50,12 +50,11 @@ const commands = [
         .setDescription('Afficher le résumé des heures et payes de tous les utilisateurs')
 ].map(cmd => cmd.toJSON());
 
-// Déploiement des commandes sur serveur test pour voir immédiatement
+// Déploiement instantané sur serveur test
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
     try {
         console.log('🔄 Déploiement des commandes slash...');
-        // Déploiement instantané sur serveur test
         await rest.put(
             Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
             { body: commands }
@@ -71,8 +70,8 @@ client.on(Events.InteractionCreate, async interaction => {
 
     // Commandes slash
     if (interaction.isChatInputCommand()) {
+        const displayName = interaction.member.displayName;
 
-        // Pointeuse
         if (interaction.commandName === 'create_pointeuse') {
             const row = new ActionRowBuilder()
                 .addComponents(
@@ -94,7 +93,6 @@ client.on(Events.InteractionCreate, async interaction => {
             await interaction.reply({ embeds: [embed], components: [row] });
         }
 
-        // Ajouter un rôle
         if (interaction.commandName === 'add_role') {
             const roleName = interaction.options.getString('role');
             const taux = interaction.options.getNumber('taux');
@@ -104,7 +102,6 @@ client.on(Events.InteractionCreate, async interaction => {
             await interaction.reply(`✅ Le rôle **${roleName}** a été ajouté avec un taux horaire de **${taux}€**.`);
         }
 
-        // Résumé global
         if (interaction.commandName === 'summary') {
             const embed = new EmbedBuilder()
                 .setTitle('📊 Résumé des heures et payes')
@@ -123,10 +120,10 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
 
                 const member = await interaction.guild.members.fetch(userId).catch(() => null);
-                const username = member ? member.user.username : 'Utilisateur supprimé';
+                const name = member ? member.displayName : 'Utilisateur supprimé';
 
                 embed.addFields({
-                    name: username,
+                    name,
                     value: `Heures totales : **${(totalMs/3600000).toFixed(2)}h**\nPaye totale : **${totalPay.toFixed(2)}€**`
                 });
             }
@@ -138,20 +135,33 @@ client.on(Events.InteractionCreate, async interaction => {
     // Gestion des boutons
     if (interaction.isButton()) {
         const userId = interaction.user.id;
-        const username = interaction.user.username;
+        const displayName = interaction.member.displayName;
         const taux = getUserTaux(interaction.member);
+        const channel = interaction.guild.channels.cache.find(c => c.name === 'general');
 
+        if (!channel) return interaction.reply({ content: '⚠️ Canal général introuvable.', ephemeral: true });
+
+        // --- Début de service ---
         if (interaction.customId === 'start_service') {
             if (!data.users[userId]) data.users[userId] = [];
-            data.users[userId].push({ start: Date.now(), end: null, taux });
+            const session = { start: Date.now(), end: null, taux };
+            data.users[userId].push(session);
             saveData();
-            await interaction.reply({ content: `🟢 ${username}, votre service a commencé ! Taux horaire : ${taux}€`, ephemeral: true });
+
+            // Envoyer message début de service
+            const message = await channel.send(`🟢 **${displayName}** a commencé son service. Taux horaire : ${taux}€`);
+            session.startMessageId = message.id;
+            saveData();
+
+            return interaction.reply({ content: `🟢 ${displayName}, votre service a commencé !`, ephemeral: true });
         }
 
+        // --- Fin de service ---
         if (interaction.customId === 'end_service') {
             if (!data.users[userId] || data.users[userId].length === 0) {
                 return interaction.reply({ content: '⚠️ Vous n\'avez pas de session en cours.', ephemeral: true });
             }
+
             const session = data.users[userId].find(s => s.end === null);
             if (!session) return interaction.reply({ content: '⚠️ Vous n\'avez pas de session en cours.', ephemeral: true });
 
@@ -161,27 +171,58 @@ client.on(Events.InteractionCreate, async interaction => {
             const pay = hoursWorked * session.taux;
             saveData();
 
+            // Supprimer message début de service
+            if (session.startMessageId) {
+                const startMessage = await channel.messages.fetch(session.startMessageId).catch(() => null);
+                if (startMessage) await startMessage.delete().catch(() => {});
+            }
+
+            // Embed fin de service avec bouton validation
             const embed = new EmbedBuilder()
-                .setTitle(`🔴 Service terminé : ${username}`)
+                .setTitle(`🔴 Service terminé : ${displayName}`)
                 .setColor('Red')
                 .addFields(
                     { name: 'Durée', value: formatDuration(durationMs), inline: true },
                     { name: 'Taux horaire', value: `${session.taux}€`, inline: true },
                     { name: 'Paye', value: `${pay.toFixed(2)}€`, inline: true }
+                )
+                .setFooter({ text: 'Cliquer sur le bouton pour valider le paiement' });
+
+            const row = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`valider_paye_${userId}_${Date.now()}`)
+                        .setLabel('✅ Valider le paiement')
+                        .setStyle(ButtonStyle.Success)
                 );
 
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await channel.send({ embeds: [embed], components: [row] });
+            return interaction.reply({ content: `🔔 ${displayName}, votre fin de service a été envoyée au patron pour validation.`, ephemeral: true });
+        }
+
+        // --- Validation par le patron ---
+        if (interaction.customId.startsWith('valider_paye_')) {
+            if (!interaction.member.roles.cache.some(r => r.name === 'Patron')) {
+                return interaction.reply({ content: '❌ Seul le patron peut valider le paiement.', ephemeral: true });
+            }
+
+            const embed = EmbedBuilder.from(interaction.message.embeds[0])
+                .setColor('Green')
+                .setFooter({ text: '✅ Paiement validé par le patron' });
+
+            await interaction.update({ embeds: [embed], components: [] });
         }
     }
 });
 
+// ----------------- Bot Ready -----------------
 client.once(Events.ClientReady, () => {
     console.log(`🤖 Connecté en tant que ${client.user.tag}`);
 });
 
 client.login(process.env.TOKEN);
 
-// ----------------- Express + Ping Render -----------------
+// ----------------- Express + ping Render -----------------
 const PORT = process.env.PORT || 3000;
 const app = express();
 
