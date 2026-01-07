@@ -166,6 +166,10 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
+client.on(Events.InteractionCreate, async interaction => {
+
+    if (!interaction.isChatInputCommand()) return;
+    
         if (interaction.commandName === 'add_role') {
             db.prepare(`
                 INSERT OR REPLACE INTO roles (role, taux)
