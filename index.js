@@ -1,10 +1,6 @@
 // ================== ANTI-CRASH ==================
-process.on('uncaughtException', err => {
-    console.error('❌ Uncaught Exception:', err);
-});
-process.on('unhandledRejection', err => {
-    console.error('❌ Unhandled Rejection:', err);
-});
+process.on('uncaughtException', err => console.error('❌ Uncaught Exception:', err));
+process.on('unhandledRejection', err => console.error('❌ Unhandled Rejection:', err));
 
 // ================== LOG ENV ==================
 console.log("TOKEN présent :", process.env.TOKEN ? "OUI" : "NON");
@@ -27,6 +23,7 @@ const {
     Routes,
     EmbedBuilder
 } = require('discord.js');
+require('dotenv').config();
 
 // ================== CLIENT ==================
 const client = new Client({
@@ -233,10 +230,21 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 // ================== READY ==================
-let botReady = false; // ✅ Déclaration de la variable
+let botReady = false; // ✅ déclaration correcte
+
 client.once(Events.ClientReady, () => {
     console.log(`🤖 Connecté en tant que ${client.user.tag}`);
+    botReady = true;
 });
+
+// Intervalle pour vérifier statut bot
+setInterval(() => {
+    if (!botReady) {
+        console.log("⚠️ Bot Discord pas encore prêt...");
+    } else {
+        console.log(`💓 Bot Discord en ligne (${new Date().toLocaleTimeString()})`);
+    }
+}, 30000); // toutes les 30s
 
 console.log("🔄 Connexion au bot Discord...");
 client.login(process.env.TOKEN)
@@ -246,17 +254,9 @@ client.login(process.env.TOKEN)
 // ================== EXPRESS ==================
 const app = express();
 const PORT = process.env.PORT || 10000;
-// ================== CHECK BOT ==================
-setInterval(() => {
-    if (!botReady) {
-        console.log("⚠️ Bot Discord pas encore prêt...");
-    } else {
-        console.log(`💓 Bot Discord en ligne (${new Date().toLocaleTimeString()})`);
-    }
-}, 30000);
 
 app.get('/', (_, res) => res.send('🤖 Bot en ligne'));
-app.listen(PORT, () => console.log(`🌐 Serveur actif sur ${PORT}`));
+app.listen(PORT, () => console.log(`🌐 Serveur web actif sur ${PORT}`));
 
 setInterval(() => {
     axios.get(`http://localhost:${PORT}`).catch(() => {});
