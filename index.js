@@ -245,6 +245,14 @@ client.login(process.env.TOKEN)
 // ================== EXPRESS ==================
 const app = express();
 const PORT = process.env.PORT || 10000;
+// ================== CHECK BOT ==================
+setInterval(async () => {
+    if (!client.isReady()) {
+        console.log("⚠️ Bot Discord pas prêt !");
+    } else {
+        console.log(`💓 Bot Discord en ligne (${new Date().toLocaleTimeString()})`);
+    }
+}, 30000);
 
 app.get('/', (_, res) => res.send('🤖 Bot en ligne'));
 app.listen(PORT, () => console.log(`🌐 Serveur actif sur ${PORT}`));
