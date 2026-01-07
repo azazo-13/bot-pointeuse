@@ -91,11 +91,13 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
   const grade = interaction.options.getString('grade');
   const taux = interaction.options.getNumber('taux');
 
+  console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
+
   try {
-    await axios.post(GOOGLE_WEBHOOK, 
-      { type: "update_taux", grade, taux }, 
-      { headers: { "Content-Type": "application/json" } }
-    );
+    await axios.post(GOOGLE_WEBHOOK, JSON.stringify({ type: "update_taux", grade, taux }), {
+  headers: { "Content-Type": "application/json" }
+});
+
     return interaction.reply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €`, ephemeral: true });
   } catch (err) {
     console.error(err);
@@ -111,12 +113,13 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') 
 
   const grade = interaction.options.getString('grade');
   const taux = interaction.options.getNumber('taux');
+  
+  console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
 
   try {
-    await axios.post(GOOGLE_WEBHOOK, 
-      { type: "update_taux", grade, taux }, 
-      { headers: { "Content-Type": "application/json" } }
-    );
+    await axios.post(GOOGLE_WEBHOOK, JSON.stringify({ type: "update_taux", grade, taux }), {
+  headers: { "Content-Type": "application/json" }
+});
     return interaction.reply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €`, ephemeral: true });
   } catch (err) {
     console.error(err);
