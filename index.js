@@ -94,20 +94,32 @@ client.on(Events.InteractionCreate, async interaction => {
     const displayName = interaction.member?.displayName || interaction.user.username;
 
     // ---------- SLASH ----------
-    if (interaction.isChatInputCommand()) {
+if (interaction.commandName === 'create_pointeuse') {
+    try {
+        // ✅ Défère la réponse pour éviter le timeout de 3s
+        await interaction.deferReply();
 
-        if(interaction.commandName === 'create_pointeuse') {
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('start_service').setLabel('🟢 Début de service').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('end_service').setLabel('🔴 Fin de service').setStyle(ButtonStyle.Danger)
-            );
-            const embed = new EmbedBuilder()
-                .setTitle('🕒 Pointeuse Automatique')
-                .setDescription('🟢 Commencer / 🔴 Terminer le service')
-                .setColor('Blue')
-                .setTimestamp();
-            return interaction.reply({ embeds:[embed], components:[row] });
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('start_service').setLabel('🟢 Début de service').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('end_service').setLabel('🔴 Fin de service').setStyle(ButtonStyle.Danger)
+        );
+
+        const embed = new EmbedBuilder()
+            .setTitle('🕒 Pointeuse')
+            .setDescription('🟢 Commencer / 🔴 Terminer le service')
+            .setColor('Blue')
+            .setTimestamp();
+
+        // ✅ Envoie le message
+        await interaction.editReply({ embeds: [embed], components: [row] });
+    } catch (err) {
+        console.error('❌ Erreur create_pointeuse:', err);
+        if (!interaction.replied) {
+            await interaction.reply({ content: '⚠️ Une erreur est survenue.', ephemeral: true });
         }
+    }
+}
+
 
         if(interaction.commandName === 'add_role') {
             const role = interaction.options.getString('role');
