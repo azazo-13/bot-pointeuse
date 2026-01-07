@@ -17,10 +17,6 @@ function saveData() {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4));
 }
 
-
-}
-
-// Formater la durée en h m s
 function formatDuration(ms) {
     const hours = Math.floor(ms / 3600000);
     const minutes = Math.floor((ms % 3600000) / 60000);
@@ -28,22 +24,15 @@ function formatDuration(ms) {
     return `${hours}h ${minutes}m ${seconds}s`;
 }
 
-// ----------------- Récupérer le taux horaire d'un membre -----------------
+// ----------------- Récupérer le taux horaire -----------------
 function getUserTaux(member) {
-    // Récupère tous les noms de rôle de l'utilisateur
     const userRoles = member.roles.cache.map(r => r.name);
-
-    // Ne garder que les rôles enregistrés dans data.roles
     const rolesValides = userRoles.filter(r => Object.keys(data.roles).includes(r));
 
-    // Si aucun rôle valide, utiliser le taux de "everyone"
     if (rolesValides.length === 0) return data.roles['everyone'];
 
-    // Sinon, prendre le taux le plus élevé
-    const tauxMax = Math.max(...rolesValides.map(r => data.roles[r]));
-    return tauxMax;
+    return Math.max(...rolesValides.map(r => data.roles[r]));
 }
-
 
 // ----------------- Commandes slash -----------------
 const commands = [
@@ -155,6 +144,7 @@ client.on(Events.InteractionCreate, async interaction => {
         const userId = interaction.user.id;
         const displayName = interaction.member.displayName;
         const taux = getUserTaux(interaction.member);
+        const channel = interaction.channel; // canal actuel
 
         // --- Début de service ---
         if (interaction.customId === 'start_service') {
@@ -185,7 +175,7 @@ client.on(Events.InteractionCreate, async interaction => {
             const pay = hoursWorked * session.taux;
             saveData();
 
-            // Supprimer message début de service
+            // Supprime message début
             if (session.startMessageId) {
                 const startMessage = await channel.messages.fetch(session.startMessageId).catch(() => null);
                 if (startMessage) await startMessage.delete().catch(() => {});
@@ -216,7 +206,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
         // --- Validation par le patron ---
         if (interaction.customId.startsWith('valider_paye_')) {
-            if (!interaction.member.roles.cache.some(r => r.name === 'Admin')) {
+            if (!interaction.member.roles.cache.some(r => r.name === 'Patron')) {
                 return interaction.reply({ content: '❌ Seul le patron peut valider le paiement.', ephemeral: true });
             }
 
