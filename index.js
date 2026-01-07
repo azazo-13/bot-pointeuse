@@ -94,7 +94,7 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
   console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
 
   // Répondre immédiatement pour éviter le timeout
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: 64 });
 
   try {
     await axios.post(
@@ -104,7 +104,7 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
     );
 
     // Modifier la réponse différée
-    return interaction.editReply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €` });
+    return interaction.editReply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €` });
   } catch (err) {
     console.error(err);
     return interaction.editReply({ content: "❌ Impossible de mettre à jour le taux" });
@@ -123,8 +123,9 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') 
   console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
 
   // Répondre immédiatement pour éviter le timeout
-  await interaction.deferReply({ ephemeral: true });
-
+  await interaction.deferReply({ flags: 64 });
+  return interaction.editReply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €` });
+  
   try {
     await axios.post(
       GOOGLE_WEBHOOK,
@@ -133,7 +134,6 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') 
     );
 
     // Modifier la réponse différée
-    return interaction.editReply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €` });
   } catch (err) {
     console.error(err);
     return interaction.editReply({ content: "❌ Impossible d'ajouter le grade" });
