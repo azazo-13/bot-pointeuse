@@ -40,8 +40,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
             { body: commands },
         await rest.put(
     Routes.applicationGuildCommands(process.env.CLIENT_ID, '1458155943844909161'),
-    { body: commands },
-);
+    { body: commands } );
         );
         console.log('Commandes slash déployées !');
     } catch (error) {
