@@ -17,11 +17,7 @@ function saveData() {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4));
 }
 
-// Récupérer le taux horaire basé uniquement sur les rôles enregistrés
-function getUserTaux(member) {
-    const userRoles = member.roles.cache.map(r => r.name);
-    const applicableRoles = userRoles.filter(r => data.roles[r]);
-    return applicableRoles.length > 0 ? Math.max(...applicableRoles.map(r => data.roles[r])) : data.roles['everyone'];
+
 }
 
 // Formater la durée en h m s
@@ -31,6 +27,23 @@ function formatDuration(ms) {
     const seconds = Math.floor((ms % 60000) / 1000);
     return `${hours}h ${minutes}m ${seconds}s`;
 }
+
+// ----------------- Récupérer le taux horaire d'un membre -----------------
+function getUserTaux(member) {
+    // Récupère tous les noms de rôle de l'utilisateur
+    const userRoles = member.roles.cache.map(r => r.name);
+
+    // Ne garder que les rôles enregistrés dans data.roles
+    const rolesValides = userRoles.filter(r => Object.keys(data.roles).includes(r));
+
+    // Si aucun rôle valide, utiliser le taux de "everyone"
+    if (rolesValides.length === 0) return data.roles['everyone'];
+
+    // Sinon, prendre le taux le plus élevé
+    const tauxMax = Math.max(...rolesValides.map(r => data.roles[r]));
+    return tauxMax;
+}
+
 
 // ----------------- Commandes slash -----------------
 const commands = [
