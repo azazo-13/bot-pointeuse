@@ -1,178 +1,159 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
-const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const { 
+  Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, 
+  EmbedBuilder, REST, Routes, SlashCommandBuilder 
+} = require('discord.js');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
+const DATA_PATH = path.join(__dirname, 'data.json');
 
-// -------------------- CONFIG --------------------
-const REPO = process.env.GITHUB_REPO;          // ex: "username/bot-pointeuse-data"
-const BRANCH = process.env.GITHUB_BRANCH || "main";
-const FILE_PATH = "data.json";
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-
-// -------------------- STOCKAGE TEMPORAIRE --------------------
-const userMessages = new Map(); // pour les embeds
-let gradesCache = {};           // grades en cache
-
-// -------------------- UTIL GITHUB --------------------
-async function getData() {
-  const url = `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}`;
-  const res = await axios.get(url, { headers: { Authorization: `token ${GITHUB_TOKEN}` } });
-  const content = Buffer.from(res.data.content, 'base64').toString();
-  return { data: JSON.parse(content), sha: res.data.sha };
+// ----- Utilitaires JSON -----
+function loadData() {
+  if (!fs.existsSync(DATA_PATH)) {
+    fs.writeFileSync(DATA_PATH, JSON.stringify({ grades: { everyone: 6000 }, services: {} }, null, 2));
+  }
+  return JSON.parse(fs.readFileSync(DATA_PATH, 'utf-8'));
 }
 
-async function saveData(data, sha) {
-  const url = `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`;
-  const base64Content = Buffer.from(JSON.stringify(data, null, 2)).toString('base64');
-  await axios.put(url, {
-    message: "Update bot data",
-    content: base64Content,
-    branch: BRANCH,
-    sha: sha
-  }, { headers: { Authorization: `token ${GITHUB_TOKEN}` } });
+function saveData(data) {
+  fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2));
 }
 
-// -------------------- COMMANDES --------------------
+// ----- Initialisation bot -----
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] // nécessaire pour lire les rôles
+});
+
+const data = loadData();
+const userMessages = new Map();
+
+// ----- Commandes -----
 const commands = [
-  new SlashCommandBuilder().setName('pointeuse').setDescription('Afficher la pointeuse avec boutons'),
-  new SlashCommandBuilder().setName('addgrade').setDescription('Ajouter un nouveau grade')
+  new SlashCommandBuilder()
+    .setName('pointeuse')
+    .setDescription('Afficher le menu de la pointeuse'),
+
+  new SlashCommandBuilder()
+    .setName('addgrade')
+    .setDescription('Ajouter un nouveau grade')
     .addStringOption(opt => opt.setName('grade').setDescription('Nom du grade').setRequired(true))
     .addNumberOption(opt => opt.setName('taux').setDescription('Taux horaire').setRequired(true)),
-  new SlashCommandBuilder().setName('settaux').setDescription('Modifier le taux d’un grade existant')
-    .addStringOption(opt => opt.setName('grade').setDescription('Nom du grade').setRequired(true))
+
+  new SlashCommandBuilder()
+    .setName('settaux')
+    .setDescription('Modifier le taux d’un grade existant')
+    .addStringOption(opt => opt.setName('grade').setDescription('Grade à modifier').setRequired(true))
     .addNumberOption(opt => opt.setName('taux').setDescription('Nouveau taux').setRequired(true))
 ].map(cmd => cmd.toJSON());
 
-// -------------------- ENREGISTREMENT COMMANDES --------------------
+// ----- Enregistrement commandes -----
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
   try {
-    console.log('🔄 Mise à jour des commandes...');
+    console.log('🔄 Mise à jour des commandes globales...');
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
     console.log('✅ Commandes mises à jour');
   } catch (err) {
-    console.error('❌ Erreur commandes :', err);
+    console.error(err);
   }
 })();
 
-// -------------------- BOT READY --------------------
-client.once('ready', async () => {
-  console.log(`✅ Connecté en tant que ${client.user.tag}`);
-  // Précharger grades
-  const { data } = await getData();
-  gradesCache = data.grades || { everyone: 6000 };
-});
-
-// -------------------- INTERACTIONS --------------------
+// ----- Détection interactions -----
 client.on('interactionCreate', async interaction => {
-  try {
-    const { data, sha } = await getData(); // récupérer JSON GitHub
-    gradesCache = data.grades;
 
-    // -------- COMMANDES SLASH --------
-    if (interaction.isChatInputCommand()) {
-      if (interaction.commandName === 'pointeuse') {
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Démarrer').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('end_service').setLabel('⏹️ Terminer').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId('payer_service').setLabel('💵 Payer').setStyle(ButtonStyle.Primary)
-        );
-        return interaction.reply({ content: '🕒 Pointeuse', components: [row] });
-      }
+  // ----- Commandes Slash -----
+  if (interaction.isChatInputCommand()) {
 
-      if (interaction.commandName === 'addgrade' || interaction.commandName === 'settaux') {
-        if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin uniquement', ephemeral: true });
-        const grade = interaction.options.getString('grade');
-        const taux = interaction.options.getNumber('taux');
-
-        data.grades[grade] = taux;
-        await saveData(data, sha);
-        gradesCache = data.grades;
-
-        return interaction.reply({ content: `✅ Grade "${grade}" mis à jour avec ${taux} €/h`, ephemeral: true });
-      }
+    // Menu pointeuse
+    if (interaction.commandName === 'pointeuse') {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Prendre son service').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('end_service').setLabel('⏹️ Fin de service').setStyle(ButtonStyle.Danger)
+      );
+      return interaction.reply({ content: '🕒 Pointeuse de service', components: [row] });
     }
 
-    // -------- BOUTONS --------
-    if (interaction.isButton()) {
-      const userId = interaction.user.id;
-      const userRoles = interaction.member.roles.cache;
-      const gradeRoles = Object.keys(gradesCache).filter(g => g !== 'everyone');
-      let userGrade = 'everyone';
-
-      // Choisir grade selon rôle le plus haut
-      for (const roleName of gradeRoles) {
-        const role = userRoles.find(r => r.name === roleName);
-        if (role) userGrade = roleName;
-      }
-
-      const now = new Date();
-
-      // START
-      if (interaction.customId === 'start_service') {
-        data.users[userId] = {
-          username: interaction.user.username,
-          start: now.toISOString(),
-          grade: userGrade
-        };
-        await saveData(data, sha);
-        return interaction.reply({ content: `🟢 Service démarré (${userGrade})`, ephemeral: true });
-      }
-
-      // END
-      if (interaction.customId === 'end_service') {
-        const userData = data.users[userId];
-        if (!userData || !userData.start) return interaction.reply({ content: '❌ Aucun service en cours', ephemeral: true });
-
-        const start = new Date(userData.start);
-        const hours = ((now - start)/3600000).toFixed(2);
-        const taux = gradesCache[userData.grade] || gradesCache['everyone'];
-        const salary = (hours * taux).toFixed(2);
-
-        userData.end = now.toISOString();
-        userData.hours = hours;
-        userData.salary = salary;
-        await saveData(data, sha);
-
-        const embed = new EmbedBuilder()
-          .setTitle('🧾 Fin de service')
-          .addFields(
-            { name: '👤 Employé', value: `<@${userId}>`, inline: true },
-            { name: '⏱ Durée', value: `${hours} h`, inline: true },
-            { name: '💰 Salaire', value: `${salary} €`, inline: true },
-            { name: '📌 Grade', value: userData.grade, inline: true }
-          )
-          .setColor(0x2ecc71)
-          .setTimestamp();
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('payer_service').setLabel('💵 Payer').setStyle(ButtonStyle.Primary)
-        );
-
-        if (userMessages.has(userId)) try { await userMessages.get(userId).delete(); } catch {}
-        const msg = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
-        userMessages.set(userId, msg);
-      }
-
-      // PAYER
-      if (interaction.customId === 'payer_service') {
-        if (!data.users[userId] || !data.users[userId].salary) return interaction.reply({ content: '❌ Aucun salaire à payer', ephemeral: true });
-        delete data.users[userId]; // réinitialiser service terminé
-        await saveData(data, sha);
-        if (userMessages.has(userId)) try { await userMessages.get(userId).delete(); } catch {}
-        return interaction.reply({ content: `💵 Salaire payé pour <@${userId}>`, ephemeral: true });
-      }
+    // Ajouter grade
+    if (interaction.commandName === 'addgrade') {
+      if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Permission admin requise', ephemeral: true });
+      const grade = interaction.options.getString('grade');
+      const taux = interaction.options.getNumber('taux');
+      data.grades[grade] = taux;
+      saveData(data);
+      return interaction.reply({ content: `✅ Grade "${grade}" ajouté avec taux ${taux} €`, ephemeral: true });
     }
 
-  } catch (err) {
-    console.error(err);
-    if (interaction.replied || interaction.deferred) interaction.editReply({ content: '❌ Erreur serveur' });
-    else interaction.reply({ content: '❌ Erreur serveur', ephemeral: true });
+    // Modifier taux
+    if (interaction.commandName === 'settaux') {
+      if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Permission admin requise', ephemeral: true });
+      const grade = interaction.options.getString('grade');
+      const taux = interaction.options.getNumber('taux');
+      if (!data.grades[grade]) return interaction.reply({ content: '❌ Grade inexistant', ephemeral: true });
+      data.grades[grade] = taux;
+      saveData(data);
+      return interaction.reply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €`, ephemeral: true });
+    }
+  }
+
+  // ----- Boutons -----
+  if (!interaction.isButton()) return;
+  const userId = interaction.user.id;
+  const member = await interaction.guild.members.fetch(userId);
+  const now = new Date();
+
+  // Déterminer le grade en fonction du rôle le plus haut
+  let grade = 'everyone'; // défaut
+  if (member.roles.cache.size > 0) {
+    const sortedRoles = member.roles.cache.sort((a,b) => b.position - a.position);
+    for (const r of sortedRoles.values()) {
+      if (data.grades[r.name]) {
+        grade = r.name;
+        break;
+      }
+    }
+  }
+
+  // Start service
+  if (interaction.customId === 'start_service') {
+    if (data.services[userId] && !data.services[userId].end) {
+      return interaction.reply({ content: '❌ Service déjà en cours', ephemeral: true });
+    }
+    data.services[userId] = {
+      start: now.toISOString(),
+      grade: grade
+    };
+    saveData(data);
+    return interaction.reply({ content: `🟢 Service commencé avec grade "${grade}"`, ephemeral: true });
+  }
+
+  // End service
+  if (interaction.customId === 'end_service') {
+    const service = data.services[userId];
+    if (!service || service.end) return interaction.reply({ content: '❌ Aucun service en cours', ephemeral: true });
+
+    service.end = now.toISOString();
+    service.hours = ((new Date(service.end) - new Date(service.start)) / 3600000).toFixed(2);
+    const taux = data.grades[service.grade] || 6000;
+    service.salary = (service.hours * taux).toFixed(2);
+    saveData(data);
+
+    const embed = new EmbedBuilder()
+      .setTitle('🧾 Fin de service')
+      .setColor(0x2ecc71)
+      .addFields(
+        { name: 'Employé', value: `<@${userId}>`, inline: true },
+        { name: 'Grade', value: service.grade, inline: true },
+        { name: 'Durée', value: `${service.hours} h`, inline: true },
+        { name: 'Salaire', value: `${service.salary} €`, inline: true }
+      );
+
+    return interaction.reply({ embeds: [embed] });
   }
 });
 
 // -------------------- CONNEXION --------------------
+client.once('ready', () => console.log(`Connecté en tant que ${client.user.tag}`));
 client.login(process.env.TOKEN);
 
 // -------------------- EXPRESS / PING --------------------
