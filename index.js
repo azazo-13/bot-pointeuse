@@ -204,7 +204,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
         // --- Validation par le patron ---
         if (interaction.customId.startsWith('valider_paye_')) {
-            if (!interaction.member.roles.cache.some(r => r.name === 'Patron')) {
+            if (!interaction.member.roles.cache.some(r => r.name === 'Admin')) {
                 return interaction.reply({ content: '❌ Seul le patron peut valider le paiement.', ephemeral: true });
             }
 
