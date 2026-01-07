@@ -27,17 +27,19 @@ const commands = [
     .addNumberOption(option => option.setName('taux').setDescription('Taux horaire du grade en €').setRequired(true))
 ].map(cmd => cmd.toJSON());
 
-// ----- Enregistrement commandes -----
+// ----- Enregistrement des commandes globales -----
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
 (async () => {
   try {
     console.log('🔄 Mise à jour des commandes globales...');
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-    console.log('✅ Commandes globales mises à jour');
+    console.log('✅ Commandes globales mises à jour dans Discord : /createp, /settaux, /addgrade');
   } catch (err) {
     console.error('❌ Erreur lors de l’enregistrement global :', err);
   }
 })();
+
 
 // ----- Stockage messages et états -----
 const userMessages = new Map(); // { userId: message }
