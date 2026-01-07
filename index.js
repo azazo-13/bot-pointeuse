@@ -8,101 +8,90 @@ const {
 const express = require('express');
 const axios = require('axios');
 
+// ----- Fichier JSON -----
 const DATA_PATH = path.join(__dirname, 'data.json');
-
-// ----- JSON Utils -----
 function loadData() {
   if (!fs.existsSync(DATA_PATH)) {
     fs.writeFileSync(DATA_PATH, JSON.stringify({ grades: { everyone: 6000 }, services: {} }, null, 2));
   }
   return JSON.parse(fs.readFileSync(DATA_PATH, 'utf-8'));
 }
-
 function saveData(data) {
   fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2));
 }
 
-// ----- Bot Initialization -----
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
-});
-
+// ----- Initialisation -----
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 const data = loadData();
-const userMessages = new Map();
 
-// ----- Slash Commands -----
+// ----- Commandes Slash -----
 const commands = [
   new SlashCommandBuilder()
     .setName('pointeuse')
-    .setDescription('Afficher le menu de la pointeuse'),
-
+    .setDescription('Ouvre le menu de la pointeuse'),
   new SlashCommandBuilder()
     .setName('addgrade')
-    .setDescription('Ajouter un nouveau grade')
+    .setDescription('Ajouter un grade')
     .addStringOption(opt => opt.setName('grade').setDescription('Nom du grade').setRequired(true))
     .addNumberOption(opt => opt.setName('taux').setDescription('Taux horaire').setRequired(true)),
-
   new SlashCommandBuilder()
     .setName('settaux')
-    .setDescription('Modifier le taux d’un grade existant')
-    .addStringOption(opt => opt.setName('grade').setDescription('Grade à modifier').setRequired(true))
+    .setDescription('Modifier le taux d’un grade')
+    .addStringOption(opt => opt.setName('grade').setDescription('Nom du grade').setRequired(true))
     .addNumberOption(opt => opt.setName('taux').setDescription('Nouveau taux').setRequired(true))
 ].map(cmd => cmd.toJSON());
 
-// ----- Register Commands -----
+// ----- Enregistrement commandes -----
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
   try {
-    console.log('🔄 Mise à jour des commandes globales...');
+    console.log('🔄 Mise à jour des commandes...');
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
     console.log('✅ Commandes mises à jour');
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) { console.error(err); }
 })();
 
-// ----- Interaction Handler -----
+// ----- Interactions -----
 client.on('interactionCreate', async interaction => {
   const userId = interaction.user.id;
-  let member;
-  if (interaction.guild) member = await interaction.guild.members.fetch(userId);
+  const member = interaction.guild ? await interaction.guild.members.fetch(userId) : null;
   const now = new Date();
 
-  // ---- Slash Commands ----
+  // ----- Slash Commands -----
   if (interaction.isChatInputCommand()) {
-    switch(interaction.commandName) {
-      case 'pointeuse':
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Prendre son service').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('end_service').setLabel('⏹️ Fin de service').setStyle(ButtonStyle.Danger)
-        );
+    if (interaction.commandName === 'pointeuse') {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Prendre son service').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('end_service').setLabel('⏹️ Fin de service').setStyle(ButtonStyle.Danger)
+      );
+      if (!interaction.deferred) await interaction.deferReply({ ephemeral: true });
+      return interaction.editReply({ content: '🕒 **Pointeuse**\nCliquez sur les boutons ci-dessous pour gérer votre service.', components: [row] });
+    }
 
-        if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true });
-        return interaction.editReply({ content: '🕒 **Pointeuse de service**\nGérez votre service en cliquant sur les boutons ci-dessous.', components: [row] });
+    if (interaction.commandName === 'addgrade') {
+      if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin requis', ephemeral: true });
+      const grade = interaction.options.getString('grade');
+      const taux = interaction.options.getNumber('taux');
+      data.grades[grade] = taux;
+      saveData(data);
+      return interaction.reply({ content: `✅ Grade "${grade}" ajouté avec taux ${taux} €/h`, ephemeral: true });
+    }
 
-      case 'addgrade':
-        if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Permission admin requise', ephemeral: true });
-        const gradeAdd = interaction.options.getString('grade');
-        const tauxAdd = interaction.options.getNumber('taux');
-        data.grades[gradeAdd] = tauxAdd;
-        saveData(data);
-        return interaction.reply({ content: `✅ Grade "${gradeAdd}" ajouté avec taux ${tauxAdd} €`, ephemeral: true });
-
-      case 'settaux':
-        if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Permission admin requise', ephemeral: true });
-        const gradeSet = interaction.options.getString('grade');
-        const tauxSet = interaction.options.getNumber('taux');
-        if (!data.grades[gradeSet]) return interaction.reply({ content: '❌ Grade inexistant', ephemeral: true });
-        data.grades[gradeSet] = tauxSet;
-        saveData(data);
-        return interaction.reply({ content: `✅ Taux du grade "${gradeSet}" mis à jour à ${tauxSet} €`, ephemeral: true });
+    if (interaction.commandName === 'settaux') {
+      if (!interaction.member.permissions.has('Administrator')) return interaction.reply({ content: '❌ Admin requis', ephemeral: true });
+      const grade = interaction.options.getString('grade');
+      if (!data.grades[grade]) return interaction.reply({ content: '❌ Grade inexistant', ephemeral: true });
+      const taux = interaction.options.getNumber('taux');
+      data.grades[grade] = taux;
+      saveData(data);
+      return interaction.reply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €/h`, ephemeral: true });
     }
   }
 
-  // ---- Buttons ----
+  // ----- Boutons -----
   if (!interaction.isButton()) return;
 
-  // Determine grade from roles
+  // Déterminer le grade selon le rôle le plus haut
   let grade = 'everyone';
   if (member && member.roles.cache.size > 0) {
     const sortedRoles = member.roles.cache.sort((a,b) => b.position - a.position);
@@ -120,10 +109,8 @@ client.on('interactionCreate', async interaction => {
         if (!interaction.replied) return interaction.reply({ content: '❌ Service déjà en cours', ephemeral: true });
         return interaction.followUp({ content: '❌ Service déjà en cours', ephemeral: true });
       }
-
       data.services[userId] = { start: now.toISOString(), grade };
       saveData(data);
-
       if (!interaction.deferred) await interaction.deferUpdate();
       return interaction.followUp({ content: `🟢 Service commencé avec grade "${grade}"`, ephemeral: true });
 
@@ -133,7 +120,6 @@ client.on('interactionCreate', async interaction => {
         if (!interaction.replied) return interaction.reply({ content: '❌ Aucun service en cours', ephemeral: true });
         return interaction.followUp({ content: '❌ Aucun service en cours', ephemeral: true });
       }
-
       service.end = now.toISOString();
       service.hours = ((new Date(service.end) - new Date(service.start)) / 3600000).toFixed(2);
       const taux = data.grades[service.grade] || 6000;
@@ -155,11 +141,11 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// ----- Bot Connection -----
+// ----- Connexion Bot -----
 client.once('ready', () => console.log(`Connecté en tant que ${client.user.tag}`));
 client.login(process.env.TOKEN);
 
-// ----- Express Server & Ping for Render -----
+// ----- Express + Ping Render -----
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (req,res) => res.status(200).send('🤖 Bot en ligne'));
