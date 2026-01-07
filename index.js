@@ -34,6 +34,10 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
     console.log('🔄 Mise à jour des commandes globales...');
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+    await rest.put(
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, "ID_DU_SERVEUR_TEST"),
+      { body: commands } );
+    
     console.log('✅ Commandes globales mises à jour dans Discord : /createp, /settaux, /addgrade');
   } catch (err) {
     console.error('❌ Erreur lors de l’enregistrement global :', err);
