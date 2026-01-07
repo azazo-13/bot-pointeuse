@@ -64,7 +64,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
             Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
             { body: commands }
         );
-        console.log('✅ Commandes slash déployées sur le serveur test !');
+        console.log('✅ Commandes slash déployées !');
     } catch (error) {
         console.error('❌ Erreur lors du déploiement des commandes :', error);
     }
@@ -73,10 +73,11 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 // ----------------- Gestion interactions -----------------
 client.on(Events.InteractionCreate, async interaction => {
 
+    const displayName = interaction.member?.displayName || interaction.user.username;
+    const channel = interaction.channel;
+
     // ---------------- Commandes slash ----------------
     if (interaction.isChatInputCommand()) {
-        const displayName = interaction.member.displayName;
-
         if (interaction.commandName === 'create_pointeuse') {
             const row = new ActionRowBuilder()
                 .addComponents(
@@ -139,16 +140,13 @@ client.on(Events.InteractionCreate, async interaction => {
 
     // ---------------- Gestion boutons ----------------
     if (interaction.isButton()) {
-        const userId = interaction.user.id;
-        const displayName = interaction.member.displayName;
         const taux = getUserTaux(interaction.member);
-        const channel = interaction.channel;
 
         // --- Début de service ---
         if (interaction.customId === 'start_service') {
-            if (!data.users[userId]) data.users[userId] = [];
+            if (!data.users[interaction.user.id]) data.users[interaction.user.id] = [];
             const session = { start: Date.now(), end: null, taux };
-            data.users[userId].push(session);
+            data.users[interaction.user.id].push(session);
             saveData();
 
             const embedStart = new EmbedBuilder()
@@ -165,11 +163,10 @@ client.on(Events.InteractionCreate, async interaction => {
 
         // --- Fin de service ---
         if (interaction.customId === 'end_service') {
-            if (!data.users[userId] || data.users[userId].length === 0) {
-                return channel.send(`⚠️ ${displayName}, vous n'avez pas de session en cours.`);
-            }
+            const sessions = data.users[interaction.user.id];
+            if (!sessions || sessions.length === 0) return channel.send(`⚠️ ${displayName}, vous n'avez pas de session en cours.`);
 
-            const session = data.users[userId].find(s => s.end === null);
+            const session = sessions.find(s => s.end === null);
             if (!session) return channel.send(`⚠️ ${displayName}, vous n'avez pas de session en cours.`);
 
             session.end = Date.now();
@@ -184,11 +181,11 @@ client.on(Events.InteractionCreate, async interaction => {
                 if (startMessage) await startMessage.delete().catch(() => {});
             }
 
-            // Embed fin de service
+            // Embed fin de service unique
             const embedEnd = new EmbedBuilder()
                 .setTitle(`🔴 Service terminé : ${displayName}`)
                 .setColor('Red')
-                .setDescription(`Résumé de la session de travail`)
+                .setDescription(`Résumé de la session`)
                 .addFields(
                     { name: 'Durée', value: `⏱ ${formatDuration(durationMs)}`, inline: true },
                     { name: 'Taux horaire', value: `💶 ${session.taux}€`, inline: true },
@@ -201,7 +198,7 @@ client.on(Events.InteractionCreate, async interaction => {
             const row = new ActionRowBuilder()
                 .addComponents(
                     new ButtonBuilder()
-                        .setCustomId(`valider_paye_${userId}_${Date.now()}`)
+                        .setCustomId(`valider_paye_${interaction.user.id}_${Date.now()}`)
                         .setLabel('✅ Valider le paiement')
                         .setStyle(ButtonStyle.Success)
                 );
@@ -210,10 +207,15 @@ client.on(Events.InteractionCreate, async interaction => {
             return;
         }
 
-        // --- Validation par le patron ---
+        // --- Validation patron ---
         if (interaction.customId.startsWith('valider_paye_')) {
             if (!interaction.member.roles.cache.some(r => r.name === 'Patron')) {
-                return channel.send('❌ Seul le patron peut valider le paiement.');
+                const msg = await channel.send('❌ Seul le patron peut valider le paiement.');
+                setTimeout(async () => {
+                    const m = await channel.messages.fetch(msg.id).catch(() => null);
+                    if (m) await m.delete().catch(() => {});
+                }, 2 * 60 * 1000); // 2 minutes
+                return;
             }
 
             const embed = EmbedBuilder.from(interaction.message.embeds[0])
@@ -227,7 +229,7 @@ client.on(Events.InteractionCreate, async interaction => {
             setTimeout(async () => {
                 const msg = await channel.messages.fetch(interaction.message.id).catch(() => null);
                 if (msg) await msg.delete().catch(() => {});
-            }, 10 * 60 * 1000); // 10 minutes
+            }, 10 * 60 * 1000);
         }
     }
 });
