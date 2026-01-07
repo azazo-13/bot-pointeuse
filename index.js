@@ -82,8 +82,10 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ embeds: [embed], components: [row] });
   }
 
- // ----- /settaux -----
+ 
+// ----- /settaux -----
 if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
+  // Vérifie si l'utilisateur a la permission admin
   if (!interaction.member.permissions.has("Administrator")) {
     return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
   }
@@ -93,18 +95,19 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
 
   console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
 
-  // Répondre immédiatement pour éviter le timeout
-  await interaction.deferReply({ flags: 64 });
-
   try {
+    // Répondre immédiatement pour éviter le timeout Discord
+    await interaction.deferReply({ ephemeral: true });
+
+    // Envoi au Web App
     await axios.post(
       GOOGLE_WEBHOOK,
-      JSON.stringify({ type: "update_taux", grade, taux }),
-      { headers: { "Content-Type": "application/json" } }
+      { type: "update_taux", grade, taux },  // <-- corps de la requête
+      { headers: { "Content-Type": "application/json" } } // <-- options
     );
 
-    // Modifier la réponse différée
-    return interaction.editReply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €` });
+    // Modification de la réponse différée
+    return interaction.editReply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €` });
   } catch (err) {
     console.error(err);
     return interaction.editReply({ content: "❌ Impossible de mettre à jour le taux" });
@@ -113,6 +116,7 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
 
 // ----- /addgrade -----
 if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') {
+  // Vérifie si l'utilisateur a la permission admin
   if (!interaction.member.permissions.has("Administrator")) {
     return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
   }
@@ -122,32 +126,24 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') 
 
   console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
 
-  // Déférer la réponse immédiatement pour éviter le timeout Discord
-  await interaction.deferReply({ flags: 64 });
-
   try {
+    // Répondre immédiatement pour éviter le timeout Discord
+    await interaction.deferReply({ ephemeral: true });
+
+    // Envoi au Web App
     await axios.post(
       GOOGLE_WEBHOOK,
-      JSON.stringify({ type: "update_taux", grade, taux }),
-      { headers: { "Content-Type": "application/json" } }
+      { type: "update_taux", grade, taux },  // <-- corps de la requête
+      { headers: { "Content-Type": "application/json" } } // <-- options
     );
 
-    // Modifier la réponse différée
-    await interaction.editReply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €` });
-  } catch (err) {
-    console.error(err);
-    await interaction.editReply({ content: "❌ Impossible d'ajouter le grade" });
-  }
-}
-
-
-    // Modifier la réponse différée
+    // Modification de la réponse différée
+    return interaction.editReply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €` });
   } catch (err) {
     console.error(err);
     return interaction.editReply({ content: "❌ Impossible d'ajouter le grade" });
   }
 }
-
 
 
   // ----- Boutons Start / Pause / Resume / End -----
