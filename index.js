@@ -82,7 +82,7 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ embeds: [embed], components: [row] });
   }
 
-  // ----- /settaux -----
+ // ----- /settaux -----
 if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
   if (!interaction.member.permissions.has("Administrator")) {
     return interaction.reply({ content: "❌ Permission admin requise", ephemeral: true });
@@ -93,15 +93,21 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'settaux') {
 
   console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
 
-  try {
-    await axios.post(GOOGLE_WEBHOOK, JSON.stringify({ type: "update_taux", grade, taux }), {
-  headers: { "Content-Type": "application/json" }
-});
+  // Répondre immédiatement pour éviter le timeout
+  await interaction.deferReply({ ephemeral: true });
 
-    return interaction.reply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €`, ephemeral: true });
+  try {
+    await axios.post(
+      GOOGLE_WEBHOOK,
+      JSON.stringify({ type: "update_taux", grade, taux }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+
+    // Modifier la réponse différée
+    return interaction.editReply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €` });
   } catch (err) {
     console.error(err);
-    return interaction.reply({ content: "❌ Impossible de mettre à jour le taux", ephemeral: true });
+    return interaction.editReply({ content: "❌ Impossible de mettre à jour le taux" });
   }
 }
 
@@ -113,19 +119,27 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') 
 
   const grade = interaction.options.getString('grade');
   const taux = interaction.options.getNumber('taux');
-  
+
   console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
 
+  // Répondre immédiatement pour éviter le timeout
+  await interaction.deferReply({ ephemeral: true });
+
   try {
-    await axios.post(GOOGLE_WEBHOOK, JSON.stringify({ type: "update_taux", grade, taux }), {
-  headers: { "Content-Type": "application/json" }
-});
-    return interaction.reply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €`, ephemeral: true });
+    await axios.post(
+      GOOGLE_WEBHOOK,
+      JSON.stringify({ type: "update_taux", grade, taux }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+
+    // Modifier la réponse différée
+    return interaction.editReply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €` });
   } catch (err) {
     console.error(err);
-    return interaction.reply({ content: "❌ Impossible d'ajouter le grade", ephemeral: true });
+    return interaction.editReply({ content: "❌ Impossible d'ajouter le grade" });
   }
 }
+
 
 
   // ----- Boutons Start / Pause / Resume / End -----
