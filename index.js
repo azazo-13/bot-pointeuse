@@ -142,7 +142,6 @@ client.on(Events.InteractionCreate, async interaction => {
         const userId = interaction.user.id;
         const displayName = interaction.member.displayName;
         const taux = getUserTaux(interaction.member);
-        const channel = interaction.channel; // canal actuel
 
         // --- Début de service ---
         if (interaction.customId === 'start_service') {
