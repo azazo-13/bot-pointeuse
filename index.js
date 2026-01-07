@@ -1,12 +1,11 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const { 
   Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, 
   EmbedBuilder, REST, Routes, SlashCommandBuilder 
 } = require('discord.js');
-const express = require('express');
-const axios = require('axios');
 
 const DATA_PATH = path.join(__dirname, 'data.json');
 
@@ -18,10 +17,10 @@ function loadData() {
   try {
     return JSON.parse(fs.readFileSync(DATA_PATH, 'utf-8'));
   } catch (err) {
-    console.error('❌ JSON invalide, réinitialisation');
-    const defaultData = { grades: { everyone: 6000 }, services: {} };
-    fs.writeFileSync(DATA_PATH, JSON.stringify(defaultData, null, 2));
-    return defaultData;
+    console.error('⚠️ Erreur lecture JSON, réinitialisation');
+    const initData = { grades: { everyone: 6000 }, services: {} };
+    fs.writeFileSync(DATA_PATH, JSON.stringify(initData, null, 2));
+    return initData;
   }
 }
 
@@ -31,7 +30,7 @@ function saveData(data) {
 
 // ----- Initialisation bot -----
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] // nécessaire pour lire les rôles
 });
 
 const data = loadData();
@@ -68,27 +67,30 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   }
 })();
 
-// ----- InteractionCreate -----
+// ----- Détection interactions -----
 client.on('interactionCreate', async interaction => {
+  const userId = interaction.user.id;
 
   // ----- Commandes Slash -----
-if (interaction.commandName === 'pointeuse') {
-  await interaction.deferReply({ ephemeral: true });
+  if (interaction.isChatInputCommand()) {
 
-  const embed = new EmbedBuilder()
-    .setTitle('🕒 Pointeuse générale')
-    .setDescription('Gérez votre service en cliquant sur les boutons ci-dessous.\n\n**Grades disponibles** : everyone')
-    .setColor(0x3498db)
-    .setFooter({ text: 'Pointeuse automatique' });
+    // Menu pointeuse
+    if (interaction.commandName === 'pointeuse') {
+      await interaction.deferReply({ ephemeral: true });
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Prendre son service').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('end_service').setLabel('⏹️ Fin de service').setStyle(ButtonStyle.Danger)
-  );
+      const embed = new EmbedBuilder()
+        .setTitle('🕒 Pointeuse générale')
+        .setDescription('Gérez votre service en cliquant sur les boutons ci-dessous.\n\n**Grades disponibles** : everyone')
+        .setColor(0x3498db)
+        .setFooter({ text: 'Pointeuse automatique' });
 
-  await interaction.editReply({ embeds: [embed], components: [row] });
-}
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('start_service').setLabel('▶️ Prendre son service').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('end_service').setLabel('⏹️ Fin de service').setStyle(ButtonStyle.Danger)
+      );
 
+      return interaction.editReply({ embeds: [embed], components: [row] });
+    }
 
     // Ajouter grade
     if (interaction.commandName === 'addgrade') {
@@ -114,15 +116,13 @@ if (interaction.commandName === 'pointeuse') {
 
   // ----- Boutons -----
   if (!interaction.isButton()) return;
-  const userId = interaction.user.id;
 
-  // Récupération du membre Discord
-  const member = await interaction.guild.members.fetch(userId).catch(() => null);
-  if (!member) return interaction.reply({ content: '❌ Impossible de récupérer vos informations Discord.', ephemeral: true });
+  await interaction.deferUpdate(); // ✅ Évite l'erreur 10062
 
+  const member = await interaction.guild.members.fetch(userId);
   const now = new Date();
 
-  // Détermination du grade via rôle
+  // Déterminer le grade en fonction du rôle le plus haut
   let grade = 'everyone';
   if (member.roles.cache.size > 0) {
     const sortedRoles = member.roles.cache.sort((a,b) => b.position - a.position);
@@ -134,20 +134,18 @@ if (interaction.commandName === 'pointeuse') {
     }
   }
 
-  // ----- START SERVICE -----
+  // Start service
   if (interaction.customId === 'start_service') {
-    if (data.services[userId] && !data.services[userId].end) {
-      return interaction.reply({ content: '❌ Service déjà en cours !', ephemeral: true });
-    }
+    if (data.services[userId] && !data.services[userId].end) return interaction.followUp({ content: '❌ Service déjà en cours', ephemeral: true });
     data.services[userId] = { start: now.toISOString(), grade };
     saveData(data);
-    return interaction.reply({ content: `🟢 Service commencé avec grade "${grade}"`, ephemeral: true });
+    return interaction.followUp({ content: `🟢 Service commencé avec grade "${grade}"`, ephemeral: true });
   }
 
-  // ----- END SERVICE -----
+  // End service
   if (interaction.customId === 'end_service') {
     const service = data.services[userId];
-    if (!service || service.end) return interaction.reply({ content: '❌ Aucun service en cours !', ephemeral: true });
+    if (!service || service.end) return interaction.followUp({ content: '❌ Aucun service en cours', ephemeral: true });
 
     service.end = now.toISOString();
     service.hours = ((new Date(service.end) - new Date(service.start)) / 3600000).toFixed(2);
@@ -165,18 +163,18 @@ if (interaction.commandName === 'pointeuse') {
         { name: 'Salaire', value: `${service.salary} €`, inline: true }
       );
 
-    return interaction.reply({ embeds: [embed] });
+    return interaction.followUp({ embeds: [embed], ephemeral: true });
   }
-
 });
 
-// ----- Connexion Bot -----
+// -------------------- CONNEXION --------------------
 client.once('ready', () => console.log(`Connecté en tant que ${client.user.tag}`));
 client.login(process.env.TOKEN);
 
-// ----- EXPRESS / PING Render -----
+// -------------------- EXPRESS / PING --------------------
+const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (req,res) => res.status(200).send('🤖 Bot en ligne'));
-app.listen(PORT, () => console.log(`🌐 Serveur actif sur le port ${PORT}`));
+app.listen(PORT, () => console.log(`🌐 Serveur actif sur ${PORT}`));
 setInterval(() => axios.get(`http://localhost:${PORT}`).catch(()=>{}), 5*60*1000);
