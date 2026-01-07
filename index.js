@@ -122,16 +122,24 @@ if (interaction.isChatInputCommand() && interaction.commandName === 'addgrade') 
 
   console.log("Envoi au Web App :", { type: "update_taux", grade, taux });
 
-  // Répondre immédiatement pour éviter le timeout
+  // Déférer la réponse immédiatement pour éviter le timeout Discord
   await interaction.deferReply({ flags: 64 });
-  return interaction.editReply({ content: `✅ Taux du grade "${grade}" mis à jour à ${taux} €` });
-  
+
   try {
     await axios.post(
       GOOGLE_WEBHOOK,
       JSON.stringify({ type: "update_taux", grade, taux }),
       { headers: { "Content-Type": "application/json" } }
     );
+
+    // Modifier la réponse différée
+    await interaction.editReply({ content: `✅ Grade "${grade}" ajouté avec un taux de ${taux} €` });
+  } catch (err) {
+    console.error(err);
+    await interaction.editReply({ content: "❌ Impossible d'ajouter le grade" });
+  }
+}
+
 
     // Modifier la réponse différée
   } catch (err) {
