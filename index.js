@@ -93,138 +93,173 @@ client.on(Events.InteractionCreate, async interaction => {
     const channel = interaction.channel;
     const displayName = interaction.member?.displayName || interaction.user.username;
 
-    // ---------- SLASH ----------
-if (interaction.commandName === 'create_pointeuse') {
-    try {
-        // ✅ Défère la réponse pour éviter le timeout de 3s
-        await interaction.deferReply();
+    // ---------- COMMANDES SLASH ----------
+    if (interaction.isChatInputCommand()) {
+        try {
+            switch (interaction.commandName) {
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('start_service').setLabel('🟢 Début de service').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('end_service').setLabel('🔴 Fin de service').setStyle(ButtonStyle.Danger)
-        );
+                // ----- CREATE POINTEUSE -----
+                case 'create_pointeuse':
+                    // Déférer la réponse pour éviter le timeout
+                    await interaction.deferReply();
 
-        const embed = new EmbedBuilder()
-            .setTitle('🕒 Pointeuse')
-            .setDescription('🟢 Commencer / 🔴 Terminer le service')
-            .setColor('Blue')
-            .setTimestamp();
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('start_service')
+                            .setLabel('🟢 Début de service')
+                            .setStyle(ButtonStyle.Success),
+                        new ButtonBuilder()
+                            .setCustomId('end_service')
+                            .setLabel('🔴 Fin de service')
+                            .setStyle(ButtonStyle.Danger)
+                    );
 
-        // ✅ Envoie le message
-        await interaction.editReply({ embeds: [embed], components: [row] });
-    } catch (err) {
-        console.error('❌ Erreur create_pointeuse:', err);
-        if (!interaction.replied) {
-            await interaction.reply({ content: '⚠️ Une erreur est survenue.', ephemeral: true });
-        }
-    }
+                    const embed = new EmbedBuilder()
+                        .setTitle('🕒 Pointeuse')
+                        .setDescription('🟢 Commencer / 🔴 Terminer le service')
+                        .setColor('Blue')
+                        .setTimestamp();
 
+                    await interaction.editReply({ embeds: [embed], components: [row] });
+                    break;
 
-        if(interaction.commandName === 'add_role') {
-            const role = interaction.options.getString('role');
-            const taux = interaction.options.getNumber('taux');
-            data.roles[role] = taux;
-            saveData();
-            return interaction.reply(`✅ Rôle **${role}** ajouté (${taux}€/h)`);
-        }
+                // ----- ADD ROLE -----
+                case 'add_role':
+                    const roleName = interaction.options.getString('role');
+                    const taux = interaction.options.getNumber('taux');
+                    data.roles[roleName] = taux;
+                    saveData();
+                    await interaction.reply(`✅ Rôle **${roleName}** ajouté (${taux}€/h)`);
+                    break;
 
-        if(interaction.commandName === 'summary') {
-            const embed = new EmbedBuilder().setTitle('📊 Résumé des heures et payes').setColor('Green');
-            for(const userId in data.users){
-                let totalMs=0, totalPay=0;
-                data.users[userId].forEach(s => {
-                    if(s.end){ totalMs += s.end - s.start; totalPay += ((s.end-s.start)/3600000)*s.taux; }
-                });
-                const member = await interaction.guild.members.fetch(userId).catch(()=>null);
-                embed.addFields({ 
-                    name: member ? member.displayName : 'Utilisateur inconnu', 
-                    value: `⏱ ${(totalMs/3600000).toFixed(2)}h\n💰 ${totalPay.toFixed(2)}€`
-                });
+                // ----- SUMMARY -----
+                case 'summary':
+                    const summaryEmbed = new EmbedBuilder()
+                        .setTitle('📊 Résumé des heures et payes')
+                        .setColor('Green');
+
+                    for (const userId in data.users) {
+                        let totalMs = 0, totalPay = 0;
+
+                        data.users[userId].forEach(s => {
+                            if (s.end) {
+                                totalMs += s.end - s.start;
+                                totalPay += ((s.end - s.start) / 3600000) * s.taux;
+                            }
+                        });
+
+                        const member = await interaction.guild.members.fetch(userId).catch(() => null);
+                        summaryEmbed.addFields({
+                            name: member ? member.displayName : 'Utilisateur inconnu',
+                            value: `⏱ ${(totalMs / 3600000).toFixed(2)}h\n💰 ${totalPay.toFixed(2)}€`
+                        });
+                    }
+
+                    await interaction.reply({ embeds: [summaryEmbed] });
+                    break;
+
+                default:
+                    await interaction.reply({ content: 'Commande inconnue', ephemeral: true });
             }
-            return interaction.reply({ embeds:[embed] });
+        } catch (err) {
+            console.error('❌ Erreur lors du traitement de la commande :', err);
+            if (!interaction.replied) {
+                await interaction.reply({ content: '⚠️ Une erreur est survenue.', ephemeral: true });
+            }
         }
     }
 
     // ---------- BOUTONS ----------
-    if(interaction.isButton()){
+    if (interaction.isButton()) {
+        try {
+            // ----- START SERVICE -----
+            if (interaction.customId === 'start_service') {
+                const taux = getUserTaux(interaction.member);
+                if (!data.users[interaction.user.id]) data.users[interaction.user.id] = [];
 
-        // ----- START -----
-        if(interaction.customId==='start_service'){
-            const taux = getUserTaux(interaction.member);
-            if(!data.users[interaction.user.id]) data.users[interaction.user.id]=[];
-            const session = { start:Date.now(), end:null, taux };
-            data.users[interaction.user.id].push(session);
-            saveData();
+                const session = { start: Date.now(), end: null, taux };
+                data.users[interaction.user.id].push(session);
+                saveData();
 
-            const embed = new EmbedBuilder()
-                .setTitle(`🟢 Début de service`)
-                .setDescription(`👤 ${displayName}\n💶 ${taux}€/h`)
-                .setColor('Blue')
-                .setTimestamp();
-            const msg = await channel.send({ embeds:[embed] });
-            session.startMessageId = msg.id;
-            saveData();
-            return;
-        }
+                const embedStart = new EmbedBuilder()
+                    .setTitle('🟢 Début de service')
+                    .setDescription(`👤 ${displayName}\n💶 ${taux}€/h`)
+                    .setColor('Blue')
+                    .setTimestamp();
 
-        // ----- END -----
-        if(interaction.customId==='end_service'){
-            const sessions = data.users[interaction.user.id];
-            if(!sessions) return;
-            const session = sessions.find(s => !s.end);
-            if(!session) return;
-
-            session.end = Date.now();
-            saveData();
-
-            if(session.startMessageId){
-                const m = await channel.messages.fetch(session.startMessageId).catch(()=>null);
-                if(m) await m.delete().catch(()=>{});
+                const msg = await channel.send({ embeds: [embedStart] });
+                session.startMessageId = msg.id;
+                saveData();
             }
 
-            const duration = session.end - session.start;
-            const pay = (duration/3600000)*session.taux;
+            // ----- END SERVICE -----
+            if (interaction.customId === 'end_service') {
+                const sessions = data.users[interaction.user.id];
+                if (!sessions) return;
 
-            const embed = new EmbedBuilder()
-                .setTitle(`🔴 Service terminé`)
-                .setColor('Red')
-                .addFields(
-                    { name:'Employé', value:displayName },
-                    { name:'Durée', value:formatDuration(duration), inline:true },
-                    { name:'Paye', value:`${pay.toFixed(2)}€`, inline:true },
-                    { name:'Date', value:`<t:${Math.floor(session.end/1000)}:F>` }
-                )
-                .setTimestamp()
-                .setFooter({ text:'Cliquez sur le bouton pour valider le paiement' });
+                const session = sessions.find(s => !s.end);
+                if (!session) return;
 
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`valider_paye_${interaction.user.id}`).setLabel('✅ Valider le paiement').setStyle(ButtonStyle.Success)
-            );
-            return channel.send({ embeds:[embed], components:[row] });
-        }
+                session.end = Date.now();
+                saveData();
 
-        // ----- VALIDATION PAIEMENT -----
-        if(interaction.customId.startsWith('valider_paye_')){
-            if(!interaction.member.roles.cache.some(r=>r.name==='Patron')){
-                const msg = await channel.send('❌ Seul le patron peut valider.');
-                setTimeout(()=>msg.delete().catch(()=>{}),2*60*1000);
-                return;
+                // Supprimer le message de début
+                if (session.startMessageId) {
+                    const m = await channel.messages.fetch(session.startMessageId).catch(() => null);
+                    if (m) await m.delete().catch(() => {});
+                }
+
+                const duration = session.end - session.start;
+                const pay = (duration / 3600000) * session.taux;
+
+                const embedEnd = new EmbedBuilder()
+                    .setTitle('🔴 Service terminé')
+                    .setColor('Red')
+                    .addFields(
+                        { name: 'Employé', value: displayName },
+                        { name: 'Durée', value: formatDuration(duration), inline: true },
+                        { name: 'Paye', value: `${pay.toFixed(2)}€`, inline: true },
+                        { name: 'Date', value: `<t:${Math.floor(session.end / 1000)}:F>` }
+                    )
+                    .setFooter({ text: 'Cliquez sur le bouton pour valider le paiement' })
+                    .setTimestamp();
+
+                const rowEnd = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`valider_paye_${interaction.user.id}`)
+                        .setLabel('✅ Valider le paiement')
+                        .setStyle(ButtonStyle.Success)
+                );
+
+                await channel.send({ embeds: [embedEnd], components: [rowEnd] });
             }
 
-            const embed = EmbedBuilder.from(interaction.message.embeds[0])
-                .setColor('Green')
-                .setFooter({ text:'✅ Paiement validé' })
-                .setTimestamp();
+            // ----- VALIDATION PAIEMENT -----
+            if (interaction.customId.startsWith('valider_paye_')) {
+                if (!interaction.member.roles.cache.some(r => r.name === 'Patron')) {
+                    const msg = await channel.send('❌ Seul le patron peut valider.');
+                    setTimeout(() => msg.delete().catch(() => {}), 2 * 60 * 1000);
+                    return;
+                }
 
-            await interaction.update({ embeds:[embed], components:[] });
+                const embedValidated = EmbedBuilder.from(interaction.message.embeds[0])
+                    .setColor('Green')
+                    .setFooter({ text: '✅ Paiement validé' })
+                    .setTimestamp();
 
-            setTimeout(async ()=>{
-                const m = await channel.messages.fetch(interaction.message.id).catch(()=>null);
-                if(m) await m.delete().catch(()=>{});
-            },10*60*1000);
+                await interaction.update({ embeds: [embedValidated], components: [] });
+
+                setTimeout(async () => {
+                    const m = await channel.messages.fetch(interaction.message.id).catch(() => null);
+                    if (m) await m.delete().catch(() => {});
+                }, 10 * 60 * 1000);
+            }
+        } catch (err) {
+            console.error('❌ Erreur lors du traitement du bouton :', err);
         }
     }
 });
+
 
 // ================== READY ==================
 let botReady = false;
