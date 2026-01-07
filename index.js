@@ -136,11 +136,32 @@ client.on('interactionCreate', async interaction => {
 
   // Start service
   if (interaction.customId === 'start_service') {
-    if (data.services[userId] && !data.services[userId].end) return interaction.followUp({ content: '❌ Service déjà en cours', ephemeral: true });
-    data.services[userId] = { start: now.toISOString(), grade };
-    saveData(data);
-    return interaction.followUp({ content: `🟢 Service commencé avec grade "${grade}"`, ephemeral: true });
+  if (!interaction.guild) 
+    return interaction.followUp({ content: '❌ Impossible de détecter votre serveur.', ephemeral: true });
+
+  const member = await interaction.guild.members.fetch(userId);
+
+  // Déterminer le grade
+  let grade = 'everyone';
+  if (member.roles.cache.size > 0) {
+    const sortedRoles = member.roles.cache.sort((a,b) => b.position - a.position);
+    for (const r of sortedRoles.values()) {
+      if (data.grades[r.name]) {
+        grade = r.name;
+        break;
+      }
+    }
   }
+
+  if (data.services[userId] && !data.services[userId].end) 
+    return interaction.followUp({ content: '❌ Service déjà en cours', ephemeral: true });
+
+  data.services[userId] = { start: new Date().toISOString(), grade };
+  saveData(data);
+
+  return interaction.followUp({ content: `🟢 Service commencé avec grade "${grade}"`, ephemeral: true });
+}
+
 
   // End service
   if (interaction.customId === 'end_service') {
