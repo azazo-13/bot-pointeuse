@@ -127,9 +127,6 @@ async function handleStart(interaction) {
   const member = interaction.member;
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
-  // 🔒 Désactiver le bouton immédiatement
-  await interaction.update({ components: [] });
-
   // Vérifier si l’utilisateur est déjà en service avant le fetch
   const resCheck = await fetch(`${SHEET_URL}?check=true&userId=${member.id}`);
   const checkData = await resCheck.json();
@@ -176,9 +173,6 @@ async function handleStart(interaction) {
 async function handleEnd(interaction) {
   const member = interaction.member;
   const name = member ? (member.nickname || member.user.username) : "Unknown";
-
-  // 🔒 Désactiver le bouton immédiatement
-  await interaction.update({ components: [] });
 
   // Vérifier si l’utilisateur est en service avant le fetch
   const resCheck = await fetch(`${SHEET_URL}?check=true&userId=${member.id}`);
@@ -245,15 +239,14 @@ async function handlePaie(interaction) {
   const name = interaction.user.username;
   console.log(`[PAIE CLICK] ${name}`);
 
-  // 🔒 Désactiver le bouton pour éviter plusieurs clics
-  const disabledRow = new ActionRowBuilder().addComponents(
-    ButtonBuilder.from(interaction.message.components[0].components[0]).setDisabled(true)
-  );
-  await interaction.message.edit({ components: [disabledRow] });
-
+  // Vérification que le bouton existe
+  if (!interaction.message.components?.[0]?.components?.[0]) {
+    return interaction.reply({ content: "❌ Impossible de traiter le paiement", ephemeral: true });
+  }
+  
+// Créer le nouvel embed
   const oldEmbed = interaction.message.embeds[0];
   let newEmbed;
-
   if (oldEmbed) {
     newEmbed = EmbedBuilder.from(oldEmbed)
       .setColor("Green")
@@ -264,7 +257,12 @@ async function handlePaie(interaction) {
       .setDescription("💶 Paiement validé ! Ce message sera supprimé dans 30 secondes.");
   }
 
-  await interaction.message.edit({ embeds: [newEmbed] });
+  // Désactiver le bouton
+  const disabledRow = new ActionRowBuilder().addComponents(
+    ButtonBuilder.from(interaction.message.components[0].components[0]).setDisabled(true)
+  
+  );
+  await interaction.message.edit({ embeds: [newEmbed], components: [disabledRow] });
 
   await interaction.reply({ content: "✅ Paiement confirmé !", ephemeral: true });
 
