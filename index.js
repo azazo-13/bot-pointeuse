@@ -50,11 +50,10 @@ async function deployCommands() {
 client.once("ready", async () => {
   console.log(`Connecté en tant que ${client.user.tag}`);
 
-  // Déployer automatiquement si besoin
   try {
     await deployCommands();
   } catch (err) {
-    console.error("Erreur déploiement commandes :", err);
+    console.error("[DEPLOY ERROR]", err);
   }
 });
 
@@ -66,6 +65,8 @@ client.on("interactionCreate", async interaction => {
 
   // --- Slash command ---
   if (interaction.isChatInputCommand() && interaction.commandName === "creatp") {
+    console.log(`[SLASH] ${name} a utilisé /creatp à ${now.toLocaleString()}`);
+
     const embed = new EmbedBuilder()
       .setTitle("🕒 Pointeuse")
       .setDescription("Clique sur Start ou End");
@@ -81,8 +82,9 @@ client.on("interactionCreate", async interaction => {
   // --- Boutons ---
   if (interaction.isButton()) {
     const roles = member.roles.cache.map(r => r.name).filter(r => r !== "@everyone");
+    console.log(`[BUTTON] ${name} a cliqué sur "${interaction.customId}" à ${now.toLocaleString()}`);
 
-    await interaction.deferReply({ ephemeral: true }); // donne plus de temps
+    await interaction.deferReply({ ephemeral: true });
 
     if (interaction.customId === "start") {
       try {
@@ -98,13 +100,17 @@ client.on("interactionCreate", async interaction => {
             roles
           })
         });
-
         const data = await res.json();
-        if (data.error) return interaction.editReply({ content: "⛔ Déjà en service" });
 
+        if (data.error) {
+          console.log(`[START] ${name} déjà en service`);
+          return interaction.editReply({ content: "⛔ Déjà en service" });
+        }
+
+        console.log(`[START] ${name} a commencé le service à ${now.toLocaleString()}`);
         return interaction.editReply({ content: "✅ Service commencé" });
       } catch (err) {
-        console.error(err);
+        console.error(`[START ERROR] ${name}`, err);
         return interaction.editReply({ content: "❌ Erreur lors de l'enregistrement" });
       }
     }
@@ -121,15 +127,19 @@ client.on("interactionCreate", async interaction => {
             end: now.toISOString()
           })
         });
-
         const data = await res.json();
-        if (data.error) return interaction.editReply({ content: "⛔ Aucun service actif" });
 
+        if (data.error) {
+          console.log(`[END] ${name} n'avait aucun service actif`);
+          return interaction.editReply({ content: "⛔ Aucun service actif" });
+        }
+
+        console.log(`[END] ${name} a terminé le service. Heures: ${data.hours}, Salaire: ${data.salary}€`);
         return interaction.editReply({
           content: `🧾 Service terminé\n⏱ Heures : ${data.hours}\n💰 Salaire : ${data.salary}€`
         });
       } catch (err) {
-        console.error(err);
+        console.error(`[END ERROR] ${name}`, err);
         return interaction.editReply({ content: "❌ Erreur lors de la clôture du service" });
       }
     }
