@@ -128,12 +128,7 @@ async function handleStart(interaction) {
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
   const now = new Date();
-  const dateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // date seule
-  const hourOnly = new Date(1970, 0, 1, now.getHours(), now.getMinutes(), now.getSeconds()); // heure seule
-
   console.log(`[START CLICK] ${name} à ${now.toLocaleString()}`);
-  console.log("DATE envoyée :", dateOnly);
-  console.log("HEURE envoyée :", hourOnly);
 
   await interaction.deferReply({ ephemeral: true });
 
@@ -145,9 +140,8 @@ async function handleStart(interaction) {
         type: "start",
         userId: member.id,
         name,
-        roles: member.roles.cache.map(r => r.name).filter(r => r !== "@everyone"),
-        date: dateOnly.toISOString(),  // envoi date séparée
-        hour: hourOnly.toISOString()   // envoi heure séparée
+        date: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
+        roles: member.roles.cache.map(r => r.name).filter(r => r !== "@everyone")
       })
     });
 
@@ -173,14 +167,25 @@ async function handleEnd(interaction) {
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
   const now = new Date();
-  const hourOnly = new Date(1970, 0, 1, now.getHours(), now.getMinutes(), now.getSeconds()); // heure seule
-
   console.log(`[END CLICK] ${name} à ${now.toLocaleString()}`);
-  console.log("HEURE envoyée :", hourOnly);
 
   await interaction.deferReply({ ephemeral: true });
 
   try {
+    // Récupérer la date et heure de début depuis la feuille
+    const startRes = await fetch(`${SHEET_URL}?user=${member.id}`);
+    const startData = await startRes.json();
+
+    if (!startData.start) {
+      return interaction.editReply({ content: "⛔ Aucun service actif" });
+    }
+
+    const startTime = new Date(startData.start);
+    const endTime = now;
+
+    // Calculer la durée en heures (ex : 1.5 = 1h30)
+    const duration = (endTime - startTime) / (1000 * 60 * 60);
+
     const res = await fetch(SHEET_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -188,14 +193,16 @@ async function handleEnd(interaction) {
         type: "end",
         userId: member.id,
         name,
-        hour: hourOnly.toISOString() // envoi uniquement l'heure
+        start: startTime.toISOString(),
+        end: endTime.toISOString(),
+        hours: duration
       })
     });
 
     const data = await res.json();
 
     if (data.error) {
-      return interaction.editReply({ content: "⛔ Aucun service actif" });
+      return interaction.editReply({ content: "⛔ Impossible d’enregistrer la fin de service" });
     }
 
     console.log(`[END] ${name} a terminé le service`);
@@ -205,8 +212,8 @@ async function handleEnd(interaction) {
       .setColor("#FF5555")
       .addFields(
         { name: "👤 Employé", value: `**${name}**`, inline: true },
-        { name: "⏱ Heures travaillées", value: `**${data.hours} h**`, inline: true },
-        { name: "💶 Salaire", value: `**${data.salary} €**`, inline: true }
+        { name: "⏱ Heures travaillées", value: `**${duration.toFixed(2)} h**`, inline: true },
+        { name: "💶 Salaire", value: `**${data.salary || "calcul en cours"} €**`, inline: true }
       )
       .setFooter({ text: "Fin de service enregistrée" })
       .setTimestamp();
