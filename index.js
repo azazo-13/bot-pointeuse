@@ -80,9 +80,10 @@ client.on("interactionCreate", async interaction => {
     console.log(`[ACTION] ${interaction.user.username} a utilisé /creatp à ${new Date().toLocaleString()}`);
 
     const embed = new EmbedBuilder()
-      .setTitle("🕒 Pointeuse")
-      .setDescription("🟢 Commencer / 🔴 Terminer le service")
-      .setColor('Blue')
+      .setTitle("🕒 Gestion des Pointages")
+      .setDescription("Utilisez les réactions pour enregistrer votre présence :\n\n🟢 **Commencer le service**\n🔴 **Terminer le service**")
+      .setColor("#FFA500") // Orange
+      .setFooter({ text: "Pointage automatique", iconURL: "https://files.catbox.moe/rfaerg.png" })
       .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
@@ -124,10 +125,19 @@ client.on("interactionCreate", async interaction => {
 // --- boutons Start ---
 async function handleStart(interaction) {
   const member = interaction.member;
-  const now = new Date();
   const name = member ? (member.nickname || member.user.username) : "Unknown";
-  const roles = member.roles.cache.map(r => r.name).filter(r => r !== "@everyone");
 
+  // 🔒 Désactiver le bouton immédiatement
+  await interaction.update({ components: [] });
+
+  // Vérifier si l’utilisateur est déjà en service avant le fetch
+  const resCheck = await fetch(`${SHEET_URL}?check=true&userId=${member.id}`);
+  const checkData = await resCheck.json();
+  if (checkData.active) {
+    return interaction.followUp({ content: "⛔ Vous êtes déjà en service", ephemeral: true });
+  }
+
+  const now = new Date();
   console.log(`[START CLICK] ${name} à ${now.toLocaleString()}`);
 
   await interaction.deferReply({ ephemeral: true });
@@ -140,9 +150,9 @@ async function handleStart(interaction) {
         type: "start",
         userId: member.id,
         name,
-        date: new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
-        start: new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
-        roles
+        date: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
+        start: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
+        roles: member.roles.cache.map(r => r.name).filter(r => r !== "@everyone")
       })
     });
 
@@ -161,12 +171,23 @@ async function handleStart(interaction) {
   }
 }
 
+
 // --- boutons End ---
 async function handleEnd(interaction) {
   const member = interaction.member;
-  const now = new Date();
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
+  // 🔒 Désactiver le bouton immédiatement
+  await interaction.update({ components: [] });
+
+  // Vérifier si l’utilisateur est en service avant le fetch
+  const resCheck = await fetch(`${SHEET_URL}?check=true&userId=${member.id}`);
+  const checkData = await resCheck.json();
+  if (!checkData.active) {
+    return interaction.followUp({ content: "⛔ Aucun service actif", ephemeral: true });
+  }
+
+  const now = new Date();
   console.log(`[END CLICK] ${name} à ${now.toLocaleString()}`);
 
   await interaction.deferReply({ ephemeral: true });
@@ -179,7 +200,7 @@ async function handleEnd(interaction) {
         type: "end",
         userId: member.id,
         name,
-        end: new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
+        end: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
       })
     });
 
@@ -191,26 +212,25 @@ async function handleEnd(interaction) {
 
     console.log(`[END] ${name} a terminé le service`);
 
-    // 🔥 Embed PUBLIC
     const embed = new EmbedBuilder()
-      .setTitle("🧾 Fin de service")
-      .setColor(0xff5555)
+      .setTitle("🧾 Récapitulatif de Fin de Service")
+      .setColor("#FF5555")
       .addFields(
-        { name: "👤 Employé", value: name, inline: true },
-        { name: "⏱ Heures", value: `${data.hours}`, inline: true },
-        { name: "💶 Salaire", value: `${data.salary}€`, inline: true }
+        { name: "👤 Employé", value: `**${name}**`, inline: true },
+        { name: "⏱ Heures travaillées", value: `**${data.hours} h**`, inline: true },
+        { name: "💶 Salaire", value: `**${data.salary} €**`, inline: true }
       )
+      .setFooter({ text: "Fin de service enregistrée" })
       .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId("pointeuse:paie")
         .setLabel("💶 Payer")
-        .setStyle(ButtonStyle.Success),
+        .setStyle(ButtonStyle.Success)
     );
 
     await interaction.channel.send({ embeds: [embed], components: [row] });
-
     return interaction.editReply({ content: "✅ Service clôturé" });
 
   } catch (err) {
@@ -219,29 +239,45 @@ async function handleEnd(interaction) {
   }
 }
 
+
 // --- boutons Paie ---
 async function handlePaie(interaction) {
   const name = interaction.user.username;
   console.log(`[PAIE CLICK] ${name}`);
 
-  // Réponse éphémère immédiate (obligatoire pour Discord)
-  await interaction.reply({
-    content: "💶 Paiement validé. Le message sera supprimé dans 2 minutes.",
-    ephemeral: true
-  });
+  // 🔒 Désactiver le bouton pour éviter plusieurs clics
+  const disabledRow = new ActionRowBuilder().addComponents(
+    ButtonBuilder.from(interaction.message.components[0].components[0]).setDisabled(true)
+  );
+  await interaction.message.edit({ components: [disabledRow] });
 
-  const messageToDelete = interaction.message;
+  const oldEmbed = interaction.message.embeds[0];
+  let newEmbed;
 
+  if (oldEmbed) {
+    newEmbed = EmbedBuilder.from(oldEmbed)
+      .setColor("Green")
+      .setDescription("💶 Paiement validé ! Ce message sera supprimé dans 30 secondes.");
+  } else {
+    newEmbed = new EmbedBuilder()
+      .setColor("Green")
+      .setDescription("💶 Paiement validé ! Ce message sera supprimé dans 30 secondes.");
+  }
+
+  await interaction.message.edit({ embeds: [newEmbed] });
+
+  await interaction.reply({ content: "✅ Paiement confirmé !", ephemeral: true });
+
+  // Supprimer après 30 secondes
   setTimeout(async () => {
     try {
-      await messageToDelete.delete();
-      console.log("[PAIE] Message supprimé automatiquement après 2 minutes");
+      await interaction.message.delete();
+      console.log("[PAIE] Message supprimé automatiquement après 30 secondes");
     } catch (err) {
       console.error("[PAIE ERROR] Impossible de supprimer le message", err);
     }
-  }, 2 * 60 * 1000); // 2 minutes
+  }, 30 * 1000);
 }
-
 
 // --- Ping Render ---
 const app = express();
