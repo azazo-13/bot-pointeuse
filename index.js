@@ -128,6 +128,8 @@ async function handleStart(interaction) {
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
   const now = new Date();
+  const displayDate = now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
+  const isoDate = now.toISOString(); // pour Google Sheets
   console.log(`[START CLICK] ${name} à ${now.toLocaleString()}`);
 
   await interaction.deferReply({ ephemeral: true });
@@ -140,8 +142,9 @@ async function handleStart(interaction) {
         type: "start",
         userId: member.id,
         name,
-        date: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
-        start: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
+        date: isoDate,
+        displayDate,
+        start: isoDate,
         roles: member.roles.cache.map(r => r.name).filter(r => r !== "@everyone")
       })
     });
@@ -169,6 +172,8 @@ async function handleEnd(interaction) {
 
   
   const now = new Date();
+  const displayDate = now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
+  const isoDate = now.toISOString(); // pour Google Sheets
   console.log(`[END CLICK] ${name} à ${now.toLocaleString()}`);
 
   await interaction.deferReply({ ephemeral: true });
@@ -181,7 +186,7 @@ async function handleEnd(interaction) {
         type: "end",
         userId: member.id,
         name,
-        end: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
+        end: isoDate
       })
     });
 
