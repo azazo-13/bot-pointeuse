@@ -128,7 +128,12 @@ async function handleStart(interaction) {
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
   const now = new Date();
+  const dateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // date seule
+  const hourOnly = new Date(1970, 0, 1, now.getHours(), now.getMinutes(), now.getSeconds()); // heure seule
+
   console.log(`[START CLICK] ${name} à ${now.toLocaleString()}`);
+  console.log("DATE envoyée :", dateOnly);
+  console.log("HEURE envoyée :", hourOnly);
 
   await interaction.deferReply({ ephemeral: true });
 
@@ -140,7 +145,9 @@ async function handleStart(interaction) {
         type: "start",
         userId: member.id,
         name,
-        roles: member.roles.cache.map(r => r.name).filter(r => r !== "@everyone")
+        roles: member.roles.cache.map(r => r.name).filter(r => r !== "@everyone"),
+        date: dateOnly.toISOString(),  // envoi date séparée
+        hour: hourOnly.toISOString()   // envoi heure séparée
       })
     });
 
@@ -165,9 +172,11 @@ async function handleEnd(interaction) {
   const member = interaction.member;
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
-  
   const now = new Date();
+  const hourOnly = new Date(1970, 0, 1, now.getHours(), now.getMinutes(), now.getSeconds()); // heure seule
+
   console.log(`[END CLICK] ${name} à ${now.toLocaleString()}`);
+  console.log("HEURE envoyée :", hourOnly);
 
   await interaction.deferReply({ ephemeral: true });
 
@@ -179,6 +188,7 @@ async function handleEnd(interaction) {
         type: "end",
         userId: member.id,
         name,
+        hour: hourOnly.toISOString() // envoi uniquement l'heure
       })
     });
 
