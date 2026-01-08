@@ -74,30 +74,35 @@ client.on("interactionCreate", async interaction => {
   const now = new Date();
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
-  // --- Slash command ---
+  // --- Slash command /creatp ---
   if (interaction.isChatInputCommand() && interaction.commandName === "creatp") {
-    console.log(`[ACTION] ${name} a utilisé /creatp à ${now.toLocaleString()}`);
+    console.log(`[ACTION] ${interaction.user.username} a utilisé /creatp à ${now.toLocaleString()}`);
 
     const embed = new EmbedBuilder()
       .setTitle("🕒 Pointeuse")
       .setDescription("Clique sur Start ou End");
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("start").setLabel("Start").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("end").setLabel("End").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder()
+        .setCustomId("start")
+        .setLabel("Start")
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId("end")
+        .setLabel("End")
+        .setStyle(ButtonStyle.Danger)
     );
 
-    // ✅ Pour éviter le timeout Discord, deferReply même si message visible
-    await interaction.deferReply({ ephemeral: false });
-    return interaction.editReply({ embeds: [embed], components: [row] }); // visible par tous
+    // ⚡ Réponse immédiate visible pour tous, plus de "L'application ne répond plus"
+    return interaction.reply({ embeds: [embed], components: [row] });
   }
 
-  // --- Boutons ---
+  // --- Boutons Start/End ---
   if (interaction.isButton()) {
     const roles = member.roles.cache.map(r => r.name).filter(r => r !== "@everyone");
     console.log(`[ACTION] ${name} a cliqué sur "${interaction.customId}" à ${now.toLocaleString()}`);
 
-    await interaction.deferReply({ ephemeral: true }); // réponse privée
+    await interaction.deferReply({ ephemeral: true }); // Temps pour traitement
 
     if (interaction.customId === "start") {
       try {
