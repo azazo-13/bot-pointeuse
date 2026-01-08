@@ -19,7 +19,7 @@ const express = require("express");
 const TOKEN = process.env.TOKEN;
 const SHEET_URL = process.env.SHEET_URL;
 const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
+const GUILD_ID = process.env.GUILD_ID; // Utilisé pour déploiement immédiat sur serveur test
 
 // --- Client Discord ---
 const client = new Client({
@@ -96,8 +96,9 @@ client.on("interactionCreate", async interaction => {
       new ButtonBuilder().setCustomId("end").setLabel("End").setStyle(ButtonStyle.Danger)
     );
 
-    // ✅ Slash command visible pour tous
-    return interaction.reply({ embeds: [embed], components: [row] });
+    // ✅ Pour éviter le timeout Discord, deferReply même si message visible
+    await interaction.deferReply({ ephemeral: false });
+    return interaction.editReply({ embeds: [embed], components: [row] }); // visible par tous
   }
 
   // --- Boutons ---
@@ -190,7 +191,7 @@ if (SELF_URL) {
     } catch (err) {
       console.error(`[AUTO PING ERROR] Impossible de ping ${SELF_URL}:`, err);
     }
-  }, 5 * 60 * 1000); // toutes les 5 minutes
+  }, 5 * 60 * 1000);
 } else {
   console.warn("⚠️ SELF_URL non défini. Le ping automatique ne fonctionnera pas !");
 }
