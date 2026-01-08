@@ -154,11 +154,11 @@ async function handleStart(interaction) {
     }
 
     console.log(`[START] ${name} a commencé le service`);
-    return interaction.editReply({ content: "✅ Service commencé" });
+    return interaction.editReply({ content: "✅ Service commencé", flags: InteractionResponseFlags.Ephemeral });
 
   } catch (err) {
     console.error(`[START ERROR] ${name}`, err);
-    return interaction.editReply({ content: "❌ Erreur lors de l'enregistrement" });
+    return interaction.editReply({ content: "❌ Erreur lors de l'enregistrement", flags: InteractionResponseFlags.Ephemeral });
   }
 }
 
@@ -189,7 +189,7 @@ async function handleEnd(interaction) {
     const data = await res.json();
 
     if (data.error) {
-      return interaction.editReply({ content: "⛔ Aucun service actif" });
+      return interaction.editReply({ content: "⛔ Aucun service actif", flags: InteractionResponseFlags.Ephemeral });
     }
 
     console.log(`[END] ${name} a terminé le service`);
@@ -213,11 +213,11 @@ async function handleEnd(interaction) {
     );
 
     await interaction.channel.send({ embeds: [embed], components: [row] });
-    return interaction.editReply({ content: "✅ Service clôturé" });
+    return interaction.editReply({ content: "✅ Service clôturé", flags: InteractionResponseFlags.Ephemeral });
 
   } catch (err) {
     console.error(`[END ERROR] ${name}`, err);
-    return interaction.editReply({ content: "❌ Erreur lors de la clôture" });
+    return interaction.editReply({ content: "❌ Erreur lors de la clôture", flags: InteractionResponseFlags.Ephemeral });
   }
 }
 
@@ -229,7 +229,7 @@ async function handlePaie(interaction) {
 
   // Vérification que le bouton existe
   if (!interaction.message.components?.[0]?.components?.[0]) {
-    return interaction.reply({ content: "❌ Impossible de traiter le paiement", ephemeral: true });
+    return interaction.reply({ content: "❌ Impossible de traiter le paiement", flags: InteractionResponseFlags.Ephemeral });
   }
   
 // Créer le nouvel embed
@@ -252,7 +252,7 @@ async function handlePaie(interaction) {
   );
   await interaction.message.edit({ embeds: [newEmbed], components: [disabledRow] });
 
-  await interaction.reply({ content: "✅ Paiement confirmé !", ephemeral: true });
+  await interaction.reply({ content: "✅ Paiement confirmé !", flags: InteractionResponseFlags.Ephemeral });
 
   // Supprimer après 30 secondes
   setTimeout(async () => {
