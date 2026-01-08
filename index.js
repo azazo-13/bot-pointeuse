@@ -1,236 +1,80 @@
-// ================== ANTI-CRASH ==================
-process.on('uncaughtException', console.error);
-process.on('unhandledRejection', console.error);
+const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
+const fetch = require("node-fetch");
+const express = require("express");
 
-// ================== IMPORTS ==================
-require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const express = require('express');
-const axios = require('axios');
-const Database = require('better-sqlite3');
-const {
-    Client,
-    GatewayIntentBits,
-    Events,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    SlashCommandBuilder,
-    REST,
-    Routes,
-    EmbedBuilder
-} = require('discord.js');
-
-// ================== CONSTANTES ==================
-const PORT = process.env.PORT || 10000;
-const DB_FILE = './database.db';
-const BACKUP_DIR = './backups';
-const BACKUP_INTERVAL = 6 * 60 * 60 * 1000;
-const MAX_BACKUPS = 10;
-
-// ================== INIT FICHIERS ==================
-if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR);
-
-// ================== SQLITE ==================
-const db = new Database(DB_FILE);
-
-// Tables
-db.prepare(`
-CREATE TABLE IF NOT EXISTS sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT,
-    start INTEGER,
-    end INTEGER,
-    taux REAL
-)`).run();
-
-db.prepare(`
-CREATE TABLE IF NOT EXISTS roles (
-    role TEXT PRIMARY KEY,
-    taux REAL
-)`).run();
-
-db.prepare(`
-INSERT OR IGNORE INTO roles (role, taux)
-VALUES ('everyone', 10)
-`).run();
-
-// ================== BACKUP AUTO ==================
-function backupDatabase() {
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const file = path.join(BACKUP_DIR, `backup-${stamp}.db`);
-    try {
-        fs.copyFileSync(DB_FILE, file);
-        cleanupBackups();
-        console.log('💾 Backup DB OK');
-    } catch(e) {
-        console.error('❌ Backup DB failed:', e);
-    }
-}
-
-function cleanupBackups() {
-    const files = fs.readdirSync(BACKUP_DIR)
-        .filter(f => f.endsWith('.db'))
-        .map(f => ({ name: f, time: fs.statSync(path.join(BACKUP_DIR, f)).mtime }))
-        .sort((a, b) => b.time - a.time);
-
-    files.slice(MAX_BACKUPS).forEach(f => fs.unlinkSync(path.join(BACKUP_DIR, f.name)));
-}
-
-backupDatabase();
-setInterval(backupDatabase, BACKUP_INTERVAL);
-
-// ================== UTILS ==================
-const formatDuration = ms => {
-    const h = Math.floor(ms / 3600000);
-    const m = Math.floor(ms % 3600000 / 60000);
-    const s = Math.floor(ms % 60000 / 1000);
-    return `${h}h ${m}m ${s}s`;
-};
-
-// ================== CLIENT ==================
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
-// ================== SLASH COMMANDS ==================
-const commands = [
-    new SlashCommandBuilder()
-        .setName('create_pointeuse')
-        .setDescription('Créer la pointeuse'),
+client.once("ready", () => {
+  console.log(`Connecté en tant que ${client.user.tag}`);
+});
 
-    new SlashCommandBuilder()
-        .setName('add_role')
-        .setDescription('Ajouter un rôle avec un taux horaire')
-        .addStringOption(o =>
-            o.setName('role')
-             .setDescription('Nom exact du rôle Discord')
-             .setRequired(true)
-        )
-        .addNumberOption(o =>
-            o.setName('taux')
-             .setDescription('Taux horaire en euros')
-             .setRequired(true)
-        )
-].map(c => c.toJSON());
+// Slash command
+client.on("interactionCreate", async interaction => {
+  if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === "creatp") {
+      const embed = new EmbedBuilder()
+        .setTitle("🕒 Pointeuse")
+        .setDescription("Clique sur Start ou End");
 
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("start").setLabel("Start").setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId("end").setLabel("End").setStyle(ButtonStyle.Danger)
+      );
 
-(async () => {
-    try {
-        await rest.put(
-            Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-            { body: commands }
-        );
-        console.log('✅ Slash commands OK');
-    } catch(e) {
-        console.error('❌ Erreur déploiement slash commands:', e);
+      await interaction.reply({ embeds: [embed], components: [row] });
     }
-})();
+  }
 
-// ================== INTERACTIONS ==================
-client.on(Events.InteractionCreate, async interaction => {
-    try {
-        if (interaction.isChatInputCommand()) {
+  if (interaction.isButton()) {
+    const member = interaction.member;
+    const name = member.nickname || member.user.username;
+    const roles = member.roles.cache.map(r => r.name).filter(r => r !== "@everyone");
+    const now = new Date();
 
-            await interaction.deferReply();
+    if (interaction.customId === "start") {
+      const res = await fetch(SHEET_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          type: "start",
+          name,
+          date: now.toLocaleDateString(),
+          start: now.toISOString(),
+          roles
+        })
+      });
 
-            if (interaction.commandName === 'create_pointeuse') {
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('start')
-                        .setLabel('🟢 Début de service')
-                        .setStyle(ButtonStyle.Success),
-                    new ButtonBuilder()
-                        .setCustomId('end')
-                        .setLabel('🔴 Fin de service')
-                        .setStyle(ButtonStyle.Danger)
-                );
+      const data = await res.json();
+      if (data.error) return interaction.reply({ content: "⛔ Déjà en service", ephemeral: true });
 
-                const embed = new EmbedBuilder()
-                    .setTitle('🕒 Pointeuse')
-                    .setDescription('Démarrer ou terminer un service')
-                    .setColor('Blue')
-                    .setTimestamp();
-
-                return interaction.editReply({ embeds: [embed], components: [row] });
-            }
-
-            if (interaction.commandName === 'add_role') {
-                db.prepare(`INSERT OR REPLACE INTO roles (role, taux) VALUES (?, ?)`)
-                  .run(
-                      interaction.options.getString('role'),
-                      interaction.options.getNumber('taux')
-                  );
-                return interaction.editReply('✅ Rôle ajouté');
-            }
-        }
-
-        if (interaction.isButton()) {
-            const uid = interaction.user.id;
-            const name = interaction.member.displayName;
-
-            if (interaction.customId === 'start') {
-                const open = db.prepare(`SELECT 1 FROM sessions WHERE user_id=? AND end IS NULL`).get(uid);
-                if (open) return interaction.reply({ content: '⚠️ Déjà en service.', ephemeral: true });
-
-                const taux = db.prepare(`SELECT MAX(taux) AS taux FROM roles`).get().taux || 10;
-                db.prepare(`INSERT INTO sessions (user_id, start, taux) VALUES (?, ?, ?)`).run(uid, Date.now(), taux);
-
-                return interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setTitle('🟢 Début de service')
-                            .setDescription(`👤 ${name}\n💶 ${taux}€/h`)
-                            .setColor('Green')
-                            .setTimestamp()
-                    ]
-                });
-            }
-
-            if (interaction.customId === 'end') {
-                const session = db.prepare(`SELECT * FROM sessions WHERE user_id=? AND end IS NULL`).get(uid);
-                if (!session) return interaction.reply({ content: '⚠️ Pas de session ouverte.', ephemeral: true });
-
-                const end = Date.now();
-                const duration = end - session.start;
-                const pay = (duration / 3600000) * session.taux;
-
-                db.prepare(`UPDATE sessions SET end=? WHERE id=?`).run(end, session.id);
-
-                return interaction.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setTitle('🔴 Fin de service')
-                            .setColor('Red')
-                            .addFields(
-                                { name: 'Employé', value: name },
-                                { name: 'Durée', value: formatDuration(duration), inline: true },
-                                { name: 'Paye', value: `${pay.toFixed(2)}€`, inline: true }
-                            )
-                            .setTimestamp()
-                    ]
-                });
-            }
-        }
-    } catch(e) {
-        console.error('❌ Interaction Error:', e);
-        if (!interaction.replied && !interaction.deferred)
-            interaction.reply({ content: '⚠️ Une erreur est survenue.', ephemeral: true });
+      interaction.reply({ content: "✅ Service commencé", ephemeral: true });
     }
+
+    if (interaction.customId === "end") {
+      const res = await fetch(SHEET_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          type: "end",
+          name,
+          end: now.toISOString()
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) return interaction.reply({ content: "⛔ Aucun service actif", ephemeral: true });
+
+      interaction.reply({
+        content: `🧾 Service terminé\n⏱ Heures : ${data.hours}\n💰 Salaire : ${data.salary}€`,
+        ephemeral: true
+      });
+    }
+  }
 });
 
-// ================== READY ==================
-client.once(Events.ClientReady, () => {
-    console.log(`🤖 Bot connecté : ${client.user.tag}`);
-});
-
-// ================== LOGIN ==================
-client.login(process.env.TOKEN);
-
-// ================== EXPRESS (RENDER) ==================
+// Ping Render
 const app = express();
-app.get('/', (_, res) => res.send('Bot en ligne'));
-app.listen(PORT);
-setInterval(() => { axios.get(`http://localhost:${PORT}`).catch(() => {}); }, 240000);
+app.get("/", (req, res) => res.send("Bot en ligne"));
+app.listen(3000);
+
+client.login(TOKEN);
