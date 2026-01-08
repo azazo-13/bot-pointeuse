@@ -1,5 +1,4 @@
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
-const { REST, Routes, SlashCommandBuilder } = require("discord.js");
+const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, REST, Routes, SlashCommandBuilder } = require("discord.js");
 const fetch = require("node-fetch");
 const express = require("express");
 
