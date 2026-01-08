@@ -28,6 +28,25 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
+// --- Login Discord ---
+client.login(TOKEN).then(() => {
+  console.log("🔑 Tentative de connexion au bot Discord...");
+}).catch(err => {
+  console.error("❌ Impossible de se connecter au bot Discord :", err);
+});
+
+// --- Ready ---
+client.once("ready", async () => {
+  console.log(`✅ Bot connecté en tant que ${client.user.tag} (Online)`);
+
+  try {
+    await deployCommands();
+  } catch (err) {
+    console.error("[READY ERROR]", err);
+  }
+});
+
+
 // --- Déploiement des commandes ---
 async function deployCommands() {
   console.log("⏳ Déploiement des commandes...");
@@ -55,23 +74,6 @@ async function deployCommands() {
   }
 }
 
-// --- Login Discord ---
-client.login(TOKEN).then(() => {
-  console.log("🔑 Tentative de connexion au bot Discord...");
-}).catch(err => {
-  console.error("❌ Impossible de se connecter au bot Discord :", err);
-});
-
-// --- Ready ---
-client.once("ready", async () => {
-  console.log(`✅ Bot connecté en tant que ${client.user.tag} (Online)`);
-
-  try {
-    await deployCommands();
-  } catch (err) {
-    console.error("[READY ERROR]", err);
-  }
-});
 
 // --- Gestion des Slash Commands ---
 client.on("interactionCreate", async interaction => {
