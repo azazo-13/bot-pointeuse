@@ -46,8 +46,6 @@ client.once("ready", async () => {
   if (DEPLOY_COMMANDS) {
     console.log("🚀 Mode déploiement des commandes activé");
     await deployCommands();
-    console.log("🛑 Arrêt du bot après déploiement");
-    process.exit(0);
   }
 });
 
@@ -77,10 +75,10 @@ client.on("interactionCreate", async interaction => {
     if (interaction.customId === "start") {
       const res = await fetch(SHEET_URL, {
         method: "POST",
-        userId: member.id,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "start",
+          userId: member.id,
           name,
           date: now.toLocaleDateString("fr-FR"),
           start: now.toISOString(),
@@ -97,10 +95,10 @@ client.on("interactionCreate", async interaction => {
     if (interaction.customId === "end") {
       const res = await fetch(SHEET_URL, {
         method: "POST",
-        userId: member.id,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "end",
+          userId: member.id,
           name,
           end: now.toISOString("fr-FR")
         })
