@@ -81,16 +81,18 @@ client.on("interactionCreate", async interaction => {
 
     const embed = new EmbedBuilder()
       .setTitle("🕒 Pointeuse")
-      .setDescription("Clique sur Start ou End");
+      .setDescription("'🟢 Commencer / 🔴 Terminer le service'")
+      .setColor('Blue')
+      .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId("start")
-        .setLabel("Start")
+        .setCustomId("pointeuse:start")
+        .setLabel("🟢 Début de service")
         .setStyle(ButtonStyle.Success),
       new ButtonBuilder()
-        .setCustomId("end")
-        .setLabel("End")
+        .setCustomId("pointeuse:end")
+        .setLabel("🔴 Fin de service")
         .setStyle(ButtonStyle.Danger)
     );
 
@@ -102,69 +104,144 @@ client.on("interactionCreate", async interaction => {
 client.on("interactionCreate", async interaction => {
   if (!interaction.isButton()) return;
 
+    // 🔒 Ignore tous les boutons qui ne sont pas à toi
+  if (!interaction.customId.startsWith("pointeuse:")) return;
+  
+  if (interaction.customId === "pointeuse:start") {
+    return handleStart(interaction);
+  }
+
+  if (interaction.customId === "pointeuse:end") {
+    return handleEnd(interaction);
+  }
+
+  if (interaction.customId === "pointeuse:paie") {
+  return handlePaie(interaction);
+  }
+  
+});
+
+// --- boutons Start ---
+async function handleStart(interaction) {
   const member = interaction.member;
   const now = new Date();
   const name = member ? (member.nickname || member.user.username) : "Unknown";
   const roles = member.roles.cache.map(r => r.name).filter(r => r !== "@everyone");
 
-  console.log(`[BUTTON CLICK] ${name} a cliqué sur "${interaction.customId}" à ${now.toLocaleString()}`);
+  console.log(`[START CLICK] ${name} à ${now.toLocaleString()}`);
 
   await interaction.deferReply({ ephemeral: true });
 
-  if (interaction.customId === "start") {
-    try {
-      const res = await fetch(SHEET_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "start",
-          userId: member.id,
-          name,
-          date: now.toLocaleString("fr-FR"),
-          start: now.toISOString(),
-          roles
-        })
-      });
+  try {
+    const res = await fetch(SHEET_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "start",
+        userId: member.id,
+        name,
+        date: now.toLocaleString("fr-FR"),
+        start: now.toISOString(),
+        roles
+      })
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (data.error) return interaction.editReply({ content: "⛔ Déjà en service" });
-
-      console.log(`[START] ${name} a commencé le service à ${now.toLocaleString()}`);
-      return interaction.editReply({ content: "✅ Service commencé" });
-    } catch (err) {
-      console.error(`[START ERROR] ${name}`, err);
-      return interaction.editReply({ content: "❌ Erreur lors de l'enregistrement" });
+    if (data.error) {
+      return interaction.editReply({ content: "⛔ Déjà en service" });
     }
+
+    console.log(`[START] ${name} a commencé le service`);
+    return interaction.editReply({ content: "✅ Service commencé" });
+
+  } catch (err) {
+    console.error(`[START ERROR] ${name}`, err);
+    return interaction.editReply({ content: "❌ Erreur lors de l'enregistrement" });
   }
+}
 
-  if (interaction.customId === "end") {
-    try {
-      const res = await fetch(SHEET_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "end",
-          userId: member.id,
-          name,
-          end: now.toISOString()
-        })
-      });
+// --- boutons End ---
+async function handleEnd(interaction) {
+  const member = interaction.member;
+  const now = new Date();
+  const name = member ? (member.nickname || member.user.username) : "Unknown";
 
-      const data = await res.json();
+  console.log(`[END CLICK] ${name} à ${now.toLocaleString()}`);
 
-      if (data.error) return interaction.editReply({ content: "⛔ Aucun service actif" });
+  await interaction.deferReply({ ephemeral: true });
 
-      console.log(`[END] ${name} a terminé le service. Heures: ${data.hours}, Salaire: ${data.salary}€`);
-      return interaction.editReply({
-        content: `🧾 Service terminé\n⏱ Heures : ${data.hours}\n💰 Salaire : ${data.salary}€`
-      });
-    } catch (err) {
-      console.error(`[END ERROR] ${name}`, err);
-      return interaction.editReply({ content: "❌ Erreur lors de la clôture du service" });
+  try {
+    const res = await fetch(SHEET_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "end",
+        userId: member.id,
+        name,
+        end: now.toISOString()
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+      return interaction.editReply({ content: "⛔ Aucun service actif" });
     }
+
+    console.log(`[END] ${name} a terminé le service`);
+
+    // 🔥 Embed PUBLIC
+    const embed = new EmbedBuilder()
+      .setTitle("🧾 Fin de service")
+      .setColor(0xff5555)
+      .addFields(
+        { name: "👤 Employé", value: name, inline: true },
+        { name: "⏱ Heures", value: `${data.hours}`, inline: true },
+        { name: "💶 Salaire", value: `${data.salary}€`, inline: true }
+      )
+      .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("pointeuse:paie")
+        .setLabel("💶 Payer")
+        .setStyle(ButtonStyle.Success),
+    );
+
+    await interaction.channel.send({ embeds: [embed], components: [row] });
+
+    return interaction.editReply({ content: "✅ Service clôturé" });
+
+  } catch (err) {
+    console.error(`[END ERROR] ${name}`, err);
+    return interaction.editReply({ content: "❌ Erreur lors de la clôture" });
   }
-});
+}
+
+// --- boutons Paie ---
+async function handlePaie(interaction) {
+  const name = interaction.user.username;
+  console.log(`[PAIE CLICK] ${name}`);
+
+  // Réponse éphémère immédiate (obligatoire pour Discord)
+  await interaction.reply({
+    content: "💶 Paiement validé. Le message sera supprimé dans 2 minutes.",
+    ephemeral: true
+  });
+
+  const messageToDelete = interaction.message;
+
+  setTimeout(async () => {
+    try {
+      await messageToDelete.delete();
+      console.log("[PAIE] Message supprimé automatiquement après 2 minutes");
+    } catch (err) {
+      console.error("[PAIE ERROR] Impossible de supprimer le message", err);
+    }
+  }, 2 * 60 * 1000); // 2 minutes
+}
+
 
 // --- Ping Render ---
 const app = express();
