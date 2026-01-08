@@ -51,7 +51,9 @@ client.once("ready", async () => {
 
 // Slash command
 client.on("interactionCreate", async interaction => {
-  if (interaction.isChatInputCommand()) {
+  if (!interaction.isChatInputCommand()) return;
+
+    
     if (interaction.commandName === "creatp") {
       const embed = new EmbedBuilder()
         .setTitle("🕒 Pointeuse")
@@ -73,6 +75,8 @@ client.on("interactionCreate", async interaction => {
     const now = new Date();
 
     if (interaction.customId === "start") {
+      await interaction.reply({ content: "⌛ Enregistrement en cours...", ephemeral: true });
+      
       const res = await fetch(SHEET_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -93,6 +97,8 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (interaction.customId === "end") {
+      await interaction.reply({ content: "⌛ Enregistrement en cours...", ephemeral: true });
+      
       const res = await fetch(SHEET_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
