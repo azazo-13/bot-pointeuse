@@ -80,8 +80,8 @@ client.on("interactionCreate", async interaction => {
           type: "start",
           userId: member.id,
           name,
-          date: now.toLocaleDateString("fr-FR"),
-          start: now.toISOString(),
+          date: now.toLocaleString("fr-FR"),
+          start: now.toISOString("fr-FR"),
           roles
         })
       });
@@ -100,7 +100,7 @@ client.on("interactionCreate", async interaction => {
           type: "end",
           userId: member.id,
           name,
-          end: now.toISOString("fr-FR")
+          end: now.toLocaleString("fr-FR")
         })
       });
 
