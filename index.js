@@ -1,16 +1,55 @@
 const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
+const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 const fetch = require("node-fetch");
 const express = require("express");
 
 const TOKEN = process.env.TOKEN;
 const SHEET_URL = process.env.SHEET_URL;
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
+const DEPLOY_COMMANDS = process.env.DEPLOY_COMMANDS === "true";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
-client.once("ready", () => {
+async function deployCommands() {
+  const commands = [
+    new SlashCommandBuilder()
+      .setName("creatp")
+      .setDescription("Créer la pointeuse")
+      .toJSON()
+  ];
+
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
+
+  if (GUILD_ID) {
+    console.log("⏳ Déploiement commandes GUILD...");
+    await rest.put(
+      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+      { body: commands }
+    );
+    console.log("✅ Commandes GUILD déployées");
+  }
+
+  console.log("⏳ Déploiement commandes GLOBAL...");
+  await rest.put(
+    Routes.applicationCommands(CLIENT_ID),
+    { body: commands }
+  );
+  console.log("✅ Commandes GLOBAL déployées");
+}
+
+
+client.once("ready", async () => {
   console.log(`Connecté en tant que ${client.user.tag}`);
+
+  if (DEPLOY_COMMANDS) {
+    console.log("🚀 Mode déploiement des commandes activé");
+    await deployCommands();
+    console.log("🛑 Arrêt du bot après déploiement");
+    process.exit(0);
+  }
 });
 
 // Slash command
