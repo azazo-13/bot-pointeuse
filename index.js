@@ -140,8 +140,6 @@ async function handleStart(interaction) {
         type: "start",
         userId: member.id,
         name,
-        date: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
-        start: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
         roles: member.roles.cache.map(r => r.name).filter(r => r !== "@everyone")
       })
     });
@@ -181,7 +179,6 @@ async function handleEnd(interaction) {
         type: "end",
         userId: member.id,
         name,
-        end: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
       })
     });
 
