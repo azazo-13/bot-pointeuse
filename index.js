@@ -10,8 +10,7 @@ const {
   EmbedBuilder, 
   REST, 
   Routes, 
-  SlashCommandBuilder,
-  InteractionResponseFlags
+  SlashCommandBuilder
 } = require("discord.js");
 const fetch = require("node-fetch");
 const express = require("express");
@@ -102,7 +101,7 @@ client.on("interactionCreate", async interaction => {
   }
 });
 
-// --- Gestion des boutons Start / End ---
+// --- Gestion des boutons  ---
 client.on("interactionCreate", async interaction => {
   if (!interaction.isButton()) return;
 
@@ -131,7 +130,7 @@ async function handleStart(interaction) {
   const now = new Date();
   console.log(`[START CLICK] ${name} à ${now.toLocaleString()}`);
 
-  await interaction.deferReply({ flags: InteractionResponseFlags.Ephemeral });
+  await interaction.deferReply({ ephemeral: true });
 
   try {
     const res = await fetch(SHEET_URL, {
@@ -154,11 +153,11 @@ async function handleStart(interaction) {
     }
 
     console.log(`[START] ${name} a commencé le service`);
-    return interaction.editReply({ content: "✅ Service commencé", flags: InteractionResponseFlags.Ephemeral });
+    return interaction.editReply({ content: "✅ Service commencé" });
 
   } catch (err) {
     console.error(`[START ERROR] ${name}`, err);
-    return interaction.editReply({ content: "❌ Erreur lors de l'enregistrement", flags: InteractionResponseFlags.Ephemeral });
+    return interaction.editReply({ content: "❌ Erreur lors de l'enregistrement" });
   }
 }
 
@@ -172,7 +171,7 @@ async function handleEnd(interaction) {
   const now = new Date();
   console.log(`[END CLICK] ${name} à ${now.toLocaleString()}`);
 
-  await interaction.deferReply({ flags: InteractionResponseFlags.Ephemeral });
+  await interaction.deferReply({ ephemeral: true });
 
   try {
     const res = await fetch(SHEET_URL, {
@@ -189,7 +188,7 @@ async function handleEnd(interaction) {
     const data = await res.json();
 
     if (data.error) {
-      return interaction.editReply({ content: "⛔ Aucun service actif", flags: InteractionResponseFlags.Ephemeral });
+      return interaction.editReply({ content: "⛔ Aucun service actif" });
     }
 
     console.log(`[END] ${name} a terminé le service`);
@@ -213,11 +212,11 @@ async function handleEnd(interaction) {
     );
 
     await interaction.channel.send({ embeds: [embed], components: [row] });
-    return interaction.editReply({ content: "✅ Service clôturé", flags: InteractionResponseFlags.Ephemeral });
+    return interaction.editReply({ content: "✅ Service clôturé" });
 
   } catch (err) {
     console.error(`[END ERROR] ${name}`, err);
-    return interaction.editReply({ content: "❌ Erreur lors de la clôture", flags: InteractionResponseFlags.Ephemeral });
+    return interaction.editReply({ content: "❌ Erreur lors de la clôture" });
   }
 }
 
@@ -226,10 +225,12 @@ async function handleEnd(interaction) {
 async function handlePaie(interaction) {
   const name = interaction.user.username;
   console.log(`[PAIE CLICK] ${name}`);
-
+  
+  await interaction.deferReply({ ephemeral: true });
+  
   // Vérification que le bouton existe
   if (!interaction.message.components?.[0]?.components?.[0]) {
-    return interaction.reply({ content: "❌ Impossible de traiter le paiement", flags: InteractionResponseFlags.Ephemeral });
+    return interaction.editReply({ content: "❌ Impossible de traiter le paiement" });
   }
   
 // Créer le nouvel embed
@@ -252,7 +253,7 @@ async function handlePaie(interaction) {
   );
   await interaction.message.edit({ embeds: [newEmbed], components: [disabledRow] });
 
-  await interaction.reply({ content: "✅ Paiement confirmé !", flags: InteractionResponseFlags.Ephemeral });
+  await interaction.editReply({ content: "✅ Paiement confirmé !" });
 
   // Supprimer après 30 secondes
   setTimeout(async () => {
