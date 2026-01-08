@@ -28,6 +28,25 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
+// --- Ready ---
+client.once("ready", async () => {
+  console.log(`✅ Bot connecté en tant que ${client.user.tag} (Online)`);
+
+  try {
+    await deployCommands();
+  } catch (err) {
+    console.error("[READY ERROR]", err);
+  }
+});
+
+// --- Login Discord ---
+client.login(TOKEN).then(() => {
+  console.log("🔑 Tentative de connexion au bot Discord...");
+}).catch(err => {
+  console.error("❌ Impossible de se connecter au bot Discord :", err);
+});
+
+
 // --- Déploiement des commandes ---
 async function deployCommands() {
   console.log("⏳ Déploiement des commandes...");
@@ -192,20 +211,3 @@ if (SELF_URL) {
   console.warn("⚠️ SELF_URL non défini. Le ping automatique ne fonctionnera pas !");
 }
 
-// --- Ready ---
-client.once("ready", async () => {
-  console.log(`✅ Bot connecté en tant que ${client.user.tag} (Online)`);
-
-  try {
-    await deployCommands();
-  } catch (err) {
-    console.error("[READY ERROR]", err);
-  }
-});
-
-// --- Login Discord ---
-client.login(TOKEN).then(() => {
-  console.log("🔑 Tentative de connexion au bot Discord...");
-}).catch(err => {
-  console.error("❌ Impossible de se connecter au bot Discord :", err);
-});
