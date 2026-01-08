@@ -29,11 +29,9 @@ const client = new Client({
 });
 
 // --- Login Discord ---
-client.login(TOKEN).then(() => {
-  console.log("🔑 Tentative de connexion au bot Discord...");
-}).catch(err => {
-  console.error("❌ Impossible de se connecter au bot Discord :", err);
-});
+client.login(TOKEN)
+  .then(() => console.log("🔑 Tentative de connexion au bot Discord..."))
+  .catch(err => console.error("❌ Impossible de se connecter au bot Discord :", err));
 
 // --- Ready ---
 client.once("ready", async () => {
@@ -46,10 +44,10 @@ client.once("ready", async () => {
   }
 });
 
-
 // --- Déploiement des commandes ---
 async function deployCommands() {
   console.log("⏳ Déploiement des commandes...");
+
   const commands = [
     new SlashCommandBuilder()
       .setName("creatp")
@@ -74,7 +72,6 @@ async function deployCommands() {
   }
 }
 
-
 // --- Gestion des Slash Commands ---
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
@@ -97,7 +94,6 @@ client.on("interactionCreate", async interaction => {
         .setStyle(ButtonStyle.Danger)
     );
 
-    // ⚡ Réponse immédiate visible pour tous
     return interaction.reply({ embeds: [embed], components: [row] });
   }
 });
@@ -111,9 +107,9 @@ client.on("interactionCreate", async interaction => {
   const name = member ? (member.nickname || member.user.username) : "Unknown";
   const roles = member.roles.cache.map(r => r.name).filter(r => r !== "@everyone");
 
-  console.log(`[BUTTON ACTION] ${name} a cliqué sur "${interaction.customId}" à ${now.toLocaleString()}`);
+  console.log(`[BUTTON CLICK] ${name} a cliqué sur "${interaction.customId}" à ${now.toLocaleString()}`);
 
-  await interaction.deferReply({ ephemeral: true }); // Réponse éphémère pour les boutons
+  await interaction.deferReply({ ephemeral: true });
 
   if (interaction.customId === "start") {
     try {
@@ -183,7 +179,6 @@ const SELF_URL = process.env.RENDER_INTERNAL_URL || process.env.PUBLIC_URL;
 
 if (SELF_URL) {
   console.log(`🔄 Ping automatique activé vers ${SELF_URL} toutes les 5 minutes`);
-  
   setInterval(async () => {
     try {
       const res = await fetch(SELF_URL);
