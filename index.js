@@ -1,17 +1,30 @@
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, REST, Routes, SlashCommandBuilder } = require("discord.js");
+require("dotenv").config();
+const { 
+  Client, 
+  GatewayIntentBits, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
+  ButtonStyle, 
+  EmbedBuilder, 
+  REST, 
+  Routes, 
+  SlashCommandBuilder 
+} = require("discord.js");
 const fetch = require("node-fetch");
 const express = require("express");
 
+// --- Variables d'environnement ---
 const TOKEN = process.env.TOKEN;
 const SHEET_URL = process.env.SHEET_URL;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
-const DEPLOY_COMMANDS = process.env.DEPLOY_COMMANDS === "true";
 
+// --- Client Discord ---
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
+// --- Déploiement des commandes ---
 async function deployCommands() {
   const commands = [
     new SlashCommandBuilder()
@@ -24,36 +37,35 @@ async function deployCommands() {
 
   if (GUILD_ID) {
     console.log("⏳ Déploiement commandes GUILD...");
-    await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-      { body: commands }
-    );
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
     console.log("✅ Commandes GUILD déployées");
   }
 
   console.log("⏳ Déploiement commandes GLOBAL...");
-  await rest.put(
-    Routes.applicationCommands(CLIENT_ID),
-    { body: commands }
-  );
+  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
   console.log("✅ Commandes GLOBAL déployées");
 }
 
-
+// --- Ready ---
 client.once("ready", async () => {
   console.log(`Connecté en tant que ${client.user.tag}`);
 
-  if (DEPLOY_COMMANDS) {
-    console.log("🚀 Mode déploiement des commandes activé");
+  // Déployer automatiquement si besoin
+  try {
     await deployCommands();
+  } catch (err) {
+    console.error("Erreur déploiement commandes :", err);
   }
 });
 
-// Slash command
+// --- Interaction slash & boutons ---
 client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
+  const member = interaction.member;
+  const now = new Date();
+  const name = member ? (member.nickname || member.user.username) : "Unknown";
 
-  if (interaction.commandName === "creatp") {
+  // --- Slash command ---
+  if (interaction.isChatInputCommand() && interaction.commandName === "creatp") {
     const embed = new EmbedBuilder()
       .setTitle("🕒 Pointeuse")
       .setDescription("Clique sur Start ou End");
@@ -63,67 +75,71 @@ client.on("interactionCreate", async interaction => {
       new ButtonBuilder().setCustomId("end").setLabel("End").setStyle(ButtonStyle.Danger)
     );
 
-    // Toujours répondre rapidement
-    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+    return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
   }
-});
 
+  // --- Boutons ---
   if (interaction.isButton()) {
-    const member = interaction.member;
-    const name = member.nickname || member.user.username;
     const roles = member.roles.cache.map(r => r.name).filter(r => r !== "@everyone");
-    const now = new Date();
+
+    await interaction.deferReply({ ephemeral: true }); // donne plus de temps
 
     if (interaction.customId === "start") {
-      await interaction.reply({ content: "⌛ Enregistrement en cours...", ephemeral: true });
-      
-      const res = await fetch(SHEET_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "start",
-          userId: member.id,
-          name,
-          date: now.toLocaleString("fr-FR"),
-          start: now.toISOString("fr-FR"),
-          roles
-        })
-      });
+      try {
+        const res = await fetch(SHEET_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "start",
+            userId: member.id,
+            name,
+            date: now.toLocaleString("fr-FR"),
+            start: now.toISOString(),
+            roles
+          })
+        });
 
-      const data = await res.json();
-      if (data.error) return interaction.reply({ content: "⛔ Déjà en service", ephemeral: true });
+        const data = await res.json();
+        if (data.error) return interaction.editReply({ content: "⛔ Déjà en service" });
 
-      interaction.reply({ content: "✅ Service commencé", ephemeral: true });
+        return interaction.editReply({ content: "✅ Service commencé" });
+      } catch (err) {
+        console.error(err);
+        return interaction.editReply({ content: "❌ Erreur lors de l'enregistrement" });
+      }
     }
 
     if (interaction.customId === "end") {
-      await interaction.reply({ content: "⌛ Enregistrement en cours...", ephemeral: true });
-      
-      const res = await fetch(SHEET_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "end",
-          userId: member.id,
-          name,
-          end: now.toLocaleString("fr-FR")
-        })
-      });
+      try {
+        const res = await fetch(SHEET_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "end",
+            userId: member.id,
+            name,
+            end: now.toISOString()
+          })
+        });
 
-      const data = await res.json();
-      if (data.error) return interaction.reply({ content: "⛔ Aucun service actif", ephemeral: true });
+        const data = await res.json();
+        if (data.error) return interaction.editReply({ content: "⛔ Aucun service actif" });
 
-      interaction.reply({
-        content: `🧾 Service terminé\n⏱ Heures : ${data.hours}\n💰 Salaire : ${data.salary}€`,
-        ephemeral: true
-      });
+        return interaction.editReply({
+          content: `🧾 Service terminé\n⏱ Heures : ${data.hours}\n💰 Salaire : ${data.salary}€`
+        });
+      } catch (err) {
+        console.error(err);
+        return interaction.editReply({ content: "❌ Erreur lors de la clôture du service" });
+      }
     }
   }
 });
 
-// Ping Render
+// --- Ping Render ---
 const app = express();
 app.get("/", (req, res) => res.send("Bot en ligne"));
-app.listen(3000);
+app.listen(3000, () => console.log("🌐 Serveur ping actif sur port 3000"));
 
+// --- Login Discord ---
 client.login(TOKEN);
