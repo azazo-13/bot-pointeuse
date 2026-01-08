@@ -77,7 +77,7 @@ client.on("interactionCreate", async interaction => {
     if (interaction.customId === "start") {
       const res = await fetch(SHEET_URL, {
         method: "POST",
-        userId: member.id
+        userId: member.id,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "start",
@@ -97,7 +97,7 @@ client.on("interactionCreate", async interaction => {
     if (interaction.customId === "end") {
       const res = await fetch(SHEET_URL, {
         method: "POST",
-        userId: member.id
+        userId: member.id,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "end",
