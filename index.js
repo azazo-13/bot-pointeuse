@@ -197,7 +197,8 @@ if (SELF_URL) {
 }
 
 // --- Login Discord ---
-client.login(TOKEN)
-  .then(() => console.log("🔑 Tentative de connexion au bot Discord..."))
-  .catch(err => console.error("❌ Impossible de se connecter au bot Discord :", err));
-
+client.login(TOKEN).then(() => {
+  console.log("🔑 Tentative de connexion au bot Discord...");
+}).catch(err => {
+  console.error("❌ Impossible de se connecter au bot Discord :", err);
+});
