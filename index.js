@@ -81,7 +81,7 @@ client.on("interactionCreate", async interaction => {
 
     const embed = new EmbedBuilder()
       .setTitle("🕒 Pointeuse")
-      .setDescription("'🟢 Commencer / 🔴 Terminer le service'")
+      .setDescription("🟢 Commencer / 🔴 Terminer le service")
       .setColor('Blue')
       .setTimestamp();
 
@@ -140,8 +140,8 @@ async function handleStart(interaction) {
         type: "start",
         userId: member.id,
         name,
-        date: now.toLocaleString("fr-FR"),
-        start: now.toISOString(),
+        date: new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
+        start: new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
         roles
       })
     });
@@ -179,7 +179,7 @@ async function handleEnd(interaction) {
         type: "end",
         userId: member.id,
         name,
-        end: now.toISOString()
+        end: new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
       })
     });
 
