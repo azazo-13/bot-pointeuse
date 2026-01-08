@@ -127,13 +127,6 @@ async function handleStart(interaction) {
   const member = interaction.member;
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
-  // Vérifier si l’utilisateur est déjà en service avant le fetch
-  const resCheck = await fetch(`${SHEET_URL}?check=true&userId=${member.id}`);
-  const checkData = await resCheck.json();
-  if (checkData.active) {
-    return interaction.followUp({ content: "⛔ Vous êtes déjà en service", ephemeral: true });
-  }
-
   const now = new Date();
   console.log(`[START CLICK] ${name} à ${now.toLocaleString()}`);
 
@@ -174,13 +167,7 @@ async function handleEnd(interaction) {
   const member = interaction.member;
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
-  // Vérifier si l’utilisateur est en service avant le fetch
-  const resCheck = await fetch(`${SHEET_URL}?check=true&userId=${member.id}`);
-  const checkData = await resCheck.json();
-  if (!checkData.active) {
-    return interaction.followUp({ content: "⛔ Aucun service actif", ephemeral: true });
-  }
-
+  
   const now = new Date();
   console.log(`[END CLICK] ${name} à ${now.toLocaleString()}`);
 
