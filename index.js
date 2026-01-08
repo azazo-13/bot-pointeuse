@@ -2,6 +2,9 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 const fetch = require("node-fetch");
 const express = require("express");
 
+const TOKEN = process.env.TOKEN;
+const SHEET_URL = process.env.SHEET_URL;
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
