@@ -64,7 +64,7 @@ client.once("ready", async () => {
   }
 });
 
-// --- Event pour détecter si le bot devient offline (disconnect) ---
+// --- Events pour détecter disconnect/reconnect ---
 client.on("shardDisconnect", (event, shardID) => {
   console.warn(`⚠️ Bot déconnecté du shard ${shardID}`, event);
 });
@@ -96,7 +96,8 @@ client.on("interactionCreate", async interaction => {
       new ButtonBuilder().setCustomId("end").setLabel("End").setStyle(ButtonStyle.Danger)
     );
 
-    return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+    // ✅ Slash command visible pour tous
+    return interaction.reply({ embeds: [embed], components: [row] });
   }
 
   // --- Boutons ---
@@ -104,7 +105,7 @@ client.on("interactionCreate", async interaction => {
     const roles = member.roles.cache.map(r => r.name).filter(r => r !== "@everyone");
     console.log(`[ACTION] ${name} a cliqué sur "${interaction.customId}" à ${now.toLocaleString()}`);
 
-    await interaction.deferReply({ ephemeral: true }); // Temps pour traitement
+    await interaction.deferReply({ ephemeral: true }); // réponse privée
 
     if (interaction.customId === "start") {
       try {
@@ -177,8 +178,7 @@ app.get("/", (req, res) => {
 app.listen(3000, () => console.log("🌐 Serveur ping actif sur port 3000"));
 
 // --- Ping automatique toutes les 5 minutes ---
-const SELF_URL = process.env.RENDER_INTERNAL_URL || process.env.PUBLIC_URL; 
-// REMPLACE PUBLIC_URL par ton URL publique du service si SELF_URL n'est pas défini
+const SELF_URL = process.env.RENDER_INTERNAL_URL || process.env.PUBLIC_URL;
 
 if (SELF_URL) {
   console.log(`🔄 Ping automatique activé vers ${SELF_URL} toutes les 5 minutes`);
