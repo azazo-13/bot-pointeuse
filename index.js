@@ -10,7 +10,7 @@ const {
   EmbedBuilder, 
   REST, 
   Routes, 
-  SlashCommandBuilder
+  SlashCommandBuilder 
 } = require("discord.js");
 const fetch = require("node-fetch");
 const express = require("express");
@@ -101,7 +101,7 @@ client.on("interactionCreate", async interaction => {
   }
 });
 
-// --- Gestion des boutons  ---
+// --- Gestion des boutons Start / End ---
 client.on("interactionCreate", async interaction => {
   if (!interaction.isButton()) return;
 
@@ -127,6 +127,13 @@ async function handleStart(interaction) {
   const member = interaction.member;
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
+  // Vérifier si l’utilisateur est déjà en service avant le fetch
+  const resCheck = await fetch(`${SHEET_URL}?check=true&userId=${member.id}`);
+  const checkData = await resCheck.json();
+  if (checkData.active) {
+    return interaction.followUp({ content: "⛔ Vous êtes déjà en service", ephemeral: true });
+  }
+
   const now = new Date();
   console.log(`[START CLICK] ${name} à ${now.toLocaleString()}`);
 
@@ -141,6 +148,7 @@ async function handleStart(interaction) {
         userId: member.id,
         name,
         date: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
+        start: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" }),
         roles: member.roles.cache.map(r => r.name).filter(r => r !== "@everyone")
       })
     });
@@ -166,26 +174,19 @@ async function handleEnd(interaction) {
   const member = interaction.member;
   const name = member ? (member.nickname || member.user.username) : "Unknown";
 
+  // Vérifier si l’utilisateur est en service avant le fetch
+  const resCheck = await fetch(`${SHEET_URL}?check=true&userId=${member.id}`);
+  const checkData = await resCheck.json();
+  if (!checkData.active) {
+    return interaction.followUp({ content: "⛔ Aucun service actif", ephemeral: true });
+  }
+
   const now = new Date();
   console.log(`[END CLICK] ${name} à ${now.toLocaleString()}`);
 
   await interaction.deferReply({ ephemeral: true });
 
   try {
-    // Récupérer la date et heure de début depuis la feuille
-    const startRes = await fetch(`${SHEET_URL}?user=${member.id}`);
-    const startData = await startRes.json();
-
-    if (!startData.start) {
-      return interaction.editReply({ content: "⛔ Aucun service actif" });
-    }
-
-    const startTime = new Date(startData.start);
-    const endTime = now;
-
-    // Calculer la durée en heures (ex : 1.5 = 1h30)
-    const duration = (endTime - startTime) / (1000 * 60 * 60);
-
     const res = await fetch(SHEET_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -193,16 +194,14 @@ async function handleEnd(interaction) {
         type: "end",
         userId: member.id,
         name,
-        start: startTime.toISOString(),
-        end: endTime.toISOString(),
-        hours: duration
+        end: now.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
       })
     });
 
     const data = await res.json();
 
     if (data.error) {
-      return interaction.editReply({ content: "⛔ Impossible d’enregistrer la fin de service" });
+      return interaction.editReply({ content: "⛔ Aucun service actif" });
     }
 
     console.log(`[END] ${name} a terminé le service`);
@@ -212,8 +211,8 @@ async function handleEnd(interaction) {
       .setColor("#FF5555")
       .addFields(
         { name: "👤 Employé", value: `**${name}**`, inline: true },
-        { name: "⏱ Heures travaillées", value: `**${duration.toFixed(2)} h**`, inline: true },
-        { name: "💶 Salaire", value: `**${data.salary || "calcul en cours"} €**`, inline: true }
+        { name: "⏱ Heures travaillées", value: `**${data.hours} h**`, inline: true },
+        { name: "💶 Salaire", value: `**${data.salary} €**`, inline: true }
       )
       .setFooter({ text: "Fin de service enregistrée" })
       .setTimestamp();
@@ -239,12 +238,10 @@ async function handleEnd(interaction) {
 async function handlePaie(interaction) {
   const name = interaction.user.username;
   console.log(`[PAIE CLICK] ${name}`);
-  
-  await interaction.deferReply({ ephemeral: true });
-  
+
   // Vérification que le bouton existe
   if (!interaction.message.components?.[0]?.components?.[0]) {
-    return interaction.editReply({ content: "❌ Impossible de traiter le paiement" });
+    return interaction.reply({ content: "❌ Impossible de traiter le paiement", ephemeral: true });
   }
   
 // Créer le nouvel embed
@@ -267,7 +264,7 @@ async function handlePaie(interaction) {
   );
   await interaction.message.edit({ embeds: [newEmbed], components: [disabledRow] });
 
-  await interaction.editReply({ content: "✅ Paiement confirmé !" });
+  await interaction.reply({ content: "✅ Paiement confirmé !", ephemeral: true });
 
   // Supprimer après 30 secondes
   setTimeout(async () => {
