@@ -1,5 +1,5 @@
 {
-  "name": "pointeuse-bot",
+  "name": "-bot-pointeuse",
   "version": "1.0.0",
   "description": "Bot Discord de pointeuse",
   "main": "index.js",
