@@ -10,7 +10,7 @@ const {
   EmbedBuilder, 
   REST, 
   Routes, 
-  SlashCommandBuilder 
+  SlashCommandBuilder
 } = require("discord.js");
 const fetch = require("node-fetch");
 const express = require("express");
@@ -101,7 +101,7 @@ client.on("interactionCreate", async interaction => {
   }
 });
 
-// --- Gestion des boutons Start / End ---
+// --- Gestion des boutons  ---
 client.on("interactionCreate", async interaction => {
   if (!interaction.isButton()) return;
 
@@ -225,10 +225,12 @@ async function handleEnd(interaction) {
 async function handlePaie(interaction) {
   const name = interaction.user.username;
   console.log(`[PAIE CLICK] ${name}`);
-
+  
+  await interaction.deferReply({ ephemeral: true });
+  
   // Vérification que le bouton existe
   if (!interaction.message.components?.[0]?.components?.[0]) {
-    return interaction.reply({ content: "❌ Impossible de traiter le paiement", ephemeral: true });
+    return interaction.editReply({ content: "❌ Impossible de traiter le paiement" });
   }
   
 // Créer le nouvel embed
@@ -251,7 +253,7 @@ async function handlePaie(interaction) {
   );
   await interaction.message.edit({ embeds: [newEmbed], components: [disabledRow] });
 
-  await interaction.reply({ content: "✅ Paiement confirmé !", ephemeral: true });
+  await interaction.editReply({ content: "✅ Paiement confirmé !" });
 
   // Supprimer après 30 secondes
   setTimeout(async () => {
