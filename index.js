@@ -53,20 +53,20 @@ client.once("ready", async () => {
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-    
-    if (interaction.commandName === "creatp") {
-      const embed = new EmbedBuilder()
-        .setTitle("🕒 Pointeuse")
-        .setDescription("Clique sur Start ou End");
+  if (interaction.commandName === "creatp") {
+    const embed = new EmbedBuilder()
+      .setTitle("🕒 Pointeuse")
+      .setDescription("Clique sur Start ou End");
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("start").setLabel("Start").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("end").setLabel("End").setStyle(ButtonStyle.Danger)
-      );
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("start").setLabel("Start").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("end").setLabel("End").setStyle(ButtonStyle.Danger)
+    );
 
-      await interaction.reply({ embeds: [embed], components: [row] });
-    }
+    // Toujours répondre rapidement
+    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
   }
+});
 
   if (interaction.isButton()) {
     const member = interaction.member;
