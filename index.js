@@ -1,4 +1,6 @@
-require("dotenv").config();
+// --- Lancement du script ---
+console.log("🚀 Lancement du bot pointeuse...");
+
 const { 
   Client, 
   GatewayIntentBits, 
@@ -26,6 +28,7 @@ const client = new Client({
 
 // --- Déploiement des commandes ---
 async function deployCommands() {
+  console.log("⏳ Déploiement des commandes...");
   const commands = [
     new SlashCommandBuilder()
       .setName("creatp")
@@ -35,26 +38,43 @@ async function deployCommands() {
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);
 
-  if (GUILD_ID) {
-    console.log("⏳ Déploiement commandes GUILD...");
-    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
-    console.log("✅ Commandes GUILD déployées");
-  }
+  try {
+    if (GUILD_ID) {
+      console.log(`[DEPLOY] Déploiement commandes sur le serveur GUILD ${GUILD_ID}...`);
+      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
+      console.log("✅ Commandes GUILD déployées avec succès !");
+    }
 
-  console.log("⏳ Déploiement commandes GLOBAL...");
-  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-  console.log("✅ Commandes GLOBAL déployées");
+    console.log("[DEPLOY] Déploiement commandes GLOBAL...");
+    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+    console.log("✅ Commandes GLOBAL déployées avec succès !");
+  } catch (err) {
+    console.error("[DEPLOY ERROR]", err);
+  }
 }
 
 // --- Ready ---
 client.once("ready", async () => {
-  console.log(`Connecté en tant que ${client.user.tag}`);
+  console.log(`✅ Bot connecté en tant que ${client.user.tag} (Online)`);
 
   try {
     await deployCommands();
   } catch (err) {
-    console.error("[DEPLOY ERROR]", err);
+    console.error("[READY ERROR]", err);
   }
+});
+
+// --- Event pour détecter si le bot devient offline (disconnect) ---
+client.on("shardDisconnect", (event, shardID) => {
+  console.warn(`⚠️ Bot déconnecté du shard ${shardID}`, event);
+});
+
+client.on("shardReconnecting", shardID => {
+  console.log(`🔄 Bot reconnecting shard ${shardID}...`);
+});
+
+client.on("error", err => {
+  console.error("❌ Erreur Discord.js :", err);
 });
 
 // --- Interaction slash & boutons ---
@@ -65,7 +85,7 @@ client.on("interactionCreate", async interaction => {
 
   // --- Slash command ---
   if (interaction.isChatInputCommand() && interaction.commandName === "creatp") {
-    console.log(`[SLASH] ${name} a utilisé /creatp à ${now.toLocaleString()}`);
+    console.log(`[ACTION] ${name} a utilisé /creatp à ${now.toLocaleString()}`);
 
     const embed = new EmbedBuilder()
       .setTitle("🕒 Pointeuse")
@@ -82,9 +102,9 @@ client.on("interactionCreate", async interaction => {
   // --- Boutons ---
   if (interaction.isButton()) {
     const roles = member.roles.cache.map(r => r.name).filter(r => r !== "@everyone");
-    console.log(`[BUTTON] ${name} a cliqué sur "${interaction.customId}" à ${now.toLocaleString()}`);
+    console.log(`[ACTION] ${name} a cliqué sur "${interaction.customId}" à ${now.toLocaleString()}`);
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ ephemeral: true }); // Temps pour traitement
 
     if (interaction.customId === "start") {
       try {
@@ -100,10 +120,11 @@ client.on("interactionCreate", async interaction => {
             roles
           })
         });
+
         const data = await res.json();
 
         if (data.error) {
-          console.log(`[START] ${name} déjà en service`);
+          console.log(`[START] ${name} était déjà en service`);
           return interaction.editReply({ content: "⛔ Déjà en service" });
         }
 
@@ -127,6 +148,7 @@ client.on("interactionCreate", async interaction => {
             end: now.toISOString()
           })
         });
+
         const data = await res.json();
 
         if (data.error) {
@@ -148,8 +170,34 @@ client.on("interactionCreate", async interaction => {
 
 // --- Ping Render ---
 const app = express();
-app.get("/", (req, res) => res.send("Bot en ligne"));
+app.get("/", (req, res) => {
+  console.log(`[PING] Serveur ping reçu à ${new Date().toLocaleString()}`);
+  res.send("Bot en ligne");
+});
 app.listen(3000, () => console.log("🌐 Serveur ping actif sur port 3000"));
 
+// --- Ping automatique toutes les 5 minutes ---
+const SELF_URL = process.env.RENDER_INTERNAL_URL || process.env.PUBLIC_URL; 
+// REMPLACE PUBLIC_URL par ton URL publique du service si SELF_URL n'est pas défini
+
+if (SELF_URL) {
+  console.log(`🔄 Ping automatique activé vers ${SELF_URL} toutes les 5 minutes`);
+  
+  setInterval(async () => {
+    try {
+      const res = await fetch(SELF_URL);
+      console.log(`[AUTO PING] Ping envoyé à ${SELF_URL} - Status: ${res.status}`);
+    } catch (err) {
+      console.error(`[AUTO PING ERROR] Impossible de ping ${SELF_URL}:`, err);
+    }
+  }, 5 * 60 * 1000); // toutes les 5 minutes
+} else {
+  console.warn("⚠️ SELF_URL non défini. Le ping automatique ne fonctionnera pas !");
+}
+
 // --- Login Discord ---
-client.login(TOKEN);
+client.login(TOKEN).then(() => {
+  console.log("🔑 Tentative de connexion au bot Discord...");
+}).catch(err => {
+  console.error("❌ Impossible de se connecter au bot Discord :", err);
+});
