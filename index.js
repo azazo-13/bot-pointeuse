@@ -77,10 +77,12 @@ client.on("interactionCreate", async interaction => {
     if (interaction.customId === "start") {
       const res = await fetch(SHEET_URL, {
         method: "POST",
+        userId: member.id
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "start",
           name,
-          date: now.toLocaleDateString(),
+          date: now.toLocaleDateString("fr-FR"),
           start: now.toISOString(),
           roles
         })
@@ -95,11 +97,12 @@ client.on("interactionCreate", async interaction => {
     if (interaction.customId === "end") {
       const res = await fetch(SHEET_URL, {
         method: "POST",
+        userId: member.id
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "end",
           name,
-          end: now.toISOString()
+          end: now.toISOString("fr-FR")
         })
       });
 
