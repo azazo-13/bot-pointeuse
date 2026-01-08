@@ -130,7 +130,7 @@ async function handleStart(interaction) {
   const now = new Date();
   console.log(`[START CLICK] ${name} à ${now.toLocaleString()}`);
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: InteractionResponseFlags.Ephemeral });
 
   try {
     const res = await fetch(SHEET_URL, {
@@ -171,7 +171,7 @@ async function handleEnd(interaction) {
   const now = new Date();
   console.log(`[END CLICK] ${name} à ${now.toLocaleString()}`);
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: InteractionResponseFlags.Ephemeral });
 
   try {
     const res = await fetch(SHEET_URL, {
