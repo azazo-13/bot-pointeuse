@@ -21,6 +21,8 @@ const SHEET_URL = process.env.SHEET_URL;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID; // Utilisé pour déploiement immédiat sur serveur test
 
+console.log("TOKEN défini ?", TOKEN ? "✅ Oui" : "❌ Non");
+
 // --- Client Discord ---
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
