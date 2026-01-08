@@ -10,7 +10,8 @@ const {
   EmbedBuilder, 
   REST, 
   Routes, 
-  SlashCommandBuilder 
+  SlashCommandBuilder,
+  InteractionResponseFlags
 } = require("discord.js");
 const fetch = require("node-fetch");
 const express = require("express");
