@@ -55,17 +55,6 @@ async function deployCommands() {
   }
 }
 
-// --- Ready ---
-client.once("ready", async () => {
-  console.log(`✅ Bot connecté en tant que ${client.user.tag} (Online)`);
-
-  try {
-    await deployCommands();
-  } catch (err) {
-    console.error("[READY ERROR]", err);
-  }
-});
-
 // --- Events pour détecter disconnect/reconnect ---
 client.on("shardDisconnect", (event, shardID) => {
   console.warn(`⚠️ Bot déconnecté du shard ${shardID}`, event);
@@ -197,6 +186,17 @@ if (SELF_URL) {
 } else {
   console.warn("⚠️ SELF_URL non défini. Le ping automatique ne fonctionnera pas !");
 }
+
+// --- Ready ---
+client.once("ready", async () => {
+  console.log(`✅ Bot connecté en tant que ${client.user.tag} (Online)`);
+
+  try {
+    await deployCommands();
+  } catch (err) {
+    console.error("[READY ERROR]", err);
+  }
+});
 
 // --- Login Discord ---
 client.login(TOKEN).then(() => {
