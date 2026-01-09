@@ -228,10 +228,26 @@ async function handleEnd(interaction) {
 
 // --- boutons Paie ---
 async function handlePaie(interaction) {
-  const name = interaction.user.username;
-  console.log(`[PAIE CLICK] ${name}`);
   
   await interaction.deferReply({ ephemeral: true });
+  
+  // 🔒 Vérification des rôles autorisés
+const ROLE_IDS = [
+  "789402678379544576",
+  "1458255225684234513"
+];
+
+const hasPermission = interaction.member.roles.cache
+  .some(role => ROLE_IDS.includes(role.id));
+
+if (!hasPermission) {
+  return interaction.editReply({
+    content: "❌ Vous n'avez pas la permission d'utiliser ce bouton."
+  });
+}
+  
+  const name = interaction.user.username;
+  console.log(`[PAIE CLICK] ${name}`);
   
   // Vérification que le bouton existe
   if (!interaction.message.components?.[0]?.components?.[0]) {
